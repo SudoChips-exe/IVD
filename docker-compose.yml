@@ -27,7 +27,7 @@ services:
     volumes:
       - ./frontend:/app/frontend
       - /app/frontend/node_modules
-    command: npm run dev
+    command: bun run dev
 
 volumes:
   node_modules:

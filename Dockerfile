@@ -1,14 +1,14 @@
-FROM node:18-alpine AS builder
+FROM oven/bun:latest AS builder
 
 WORKDIR /app/frontend
 
+# Copy frontend package manifest and install deps with Bun
 COPY frontend/package*.json ./
+RUN bun install
 
-RUN npm install
-
+# Copy frontend source and build
 COPY frontend/ .
-
-RUN npm run build
+RUN bun run build
 
 # Stage 2: Rust backend
 FROM rust:latest AS rust-builder

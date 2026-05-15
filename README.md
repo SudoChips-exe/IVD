@@ -19,6 +19,9 @@
 
 ## 🚀 Quick Start
 
+
+# 🚀 Quick Start
+
 ### For Users
 1. Visit **[video-downloader.app](https://video-downloader.app)** (when deployed)
 2. Paste any social media video URL into the input field
@@ -29,14 +32,14 @@
 
 #### Prerequisites
 - Rust 1.70+
-- Node.js 18+
+- Bun (recommended) or Node.js 18+
 - Docker (optional, for containerization)
 
 #### Setup & Run Locally
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/video-downloader.git
+
 cd video-downloader
 
 # Start the Rust backend
@@ -44,17 +47,24 @@ cd backend
 cargo build --release
 cargo run
 
-# In another terminal, start the React frontend
+# In another terminal, start the React frontend using Bun
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Backend runs on `http://localhost:8080`  
 Frontend runs on `http://localhost:5173`
+ 
+Or, start both backend and frontend with a single command from the project root:
 
-## 🏗️ Architecture
+```bash
+# From repository root
+bun install    # (only needed first time to ensure bun can run dev.ts)
+bun run dev
+```
 
+Use Ctrl+C to stop both services.
 **Tech Stack:**
 - **Backend**: Rust + Actix-web (high-performance HTTP server)
 - **Frontend**: React + TypeScript + Vite (fast, responsive UI)

@@ -1,13 +1,15 @@
-FROM node:18-alpine
+FROM oven/bun:latest
 
 WORKDIR /app
 
+# Copy package manifest and install with Bun
 COPY frontend/package*.json ./
+RUN bun install
 
-RUN npm install
-
+# Copy the rest of the frontend source
 COPY frontend/ .
 
 EXPOSE 5173
 
-CMD ["npm", "run", "dev"]
+# Use Bun to run the dev server
+CMD ["bun", "run", "dev"]

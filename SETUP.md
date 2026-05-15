@@ -66,10 +66,21 @@ cargo run
 **Frontend (Terminal 2):**
 ```bash
 cd frontend
-npm install
-npm run dev
+bun install
+bun run dev
 # Runs on http://localhost:5173
 ```
+
+You can also start both services from the repository root with the Bun orchestrator:
+
+```bash
+# From repo root
+bun install    # (run once to ensure Bun can execute dev.ts)
+bun run dev
+# Runs backend (cargo run) and frontend (bun run dev) concurrently
+```
+
+Docker: the project provides a Bun-based `frontend.Dockerfile` and the frontend service in `docker-compose.yml`.
 
 ### Docker Compose
 ```bash
