@@ -26,12 +26,12 @@ This project provides a comprehensive backend and frontend for downloading video
 ### 📋 Next Steps
 
 #### Phase 2: Platform Integration (Priority Order)
-1. **Instagram Adapter** — Use instagrapi or Instagram Graph API
-2. **TikTok Adapter** — Implement video extraction
-3. **YouTube Adapter** — Use yt-dlp or YouTube API
-4. **Twitter/X Adapter** — Twitter API v2 integration
-5. **Facebook Adapter** — Graph API integration
-6. **Snapchat Adapter** — Research and implement
+1. **Instagram Adapter** — Implemented page scraping + metadata extraction
+2. **TikTok Adapter** — Implemented page scraping + direct download URL extraction
+3. **YouTube Adapter** — Added metadata page fallback; full downloader pending yt-dlp / signature decoding
+4. **Twitter/X Adapter** — Added public URL metadata adapter for OG video extraction
+5. **Facebook Adapter** — Added public URL metadata adapter for OG video extraction
+6. **Snapchat Adapter** — Added public URL metadata adapter for OG video extraction
 
 #### Phase 3: Backend Features
 - [ ] Implement actual video streaming to frontend

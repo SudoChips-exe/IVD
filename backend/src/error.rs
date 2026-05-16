@@ -92,16 +92,16 @@ impl ResponseError for AppError {
             _ => None,
         };
 
-        let mut response = HttpResponse::build(status).json(json!({
-            "error": error_code,
-            "message": self.to_string(),
-        }));
+        let mut builder = HttpResponse::build(status);
 
         if let Some(retry_after) = retry_after {
-            response.insert_header(("Retry-After", retry_after.to_string()));
+            builder.insert_header(("Retry-After", retry_after.to_string()));
         }
 
-        response.finish()
+        builder.json(json!({
+            "error": error_code,
+            "message": self.to_string(),
+        }))
     }
 }
 

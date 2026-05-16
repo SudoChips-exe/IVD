@@ -58,8 +58,8 @@ pub fn extract_video_id(url: &str, platform: Platform) -> AppResult<String> {
             }
         }
         Platform::TikTok => {
-            // TikTok: /video/ID
-            let re = Regex::new(r"(?:tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)/(?:video/)?(\d+)")
+            // TikTok: /@user/video/ID or short links
+            let re = Regex::new(r"(?:tiktok\.com/(?:@[^/]+/video/|[^/]+/video/)?|vm\.tiktok\.com|vt\.tiktok\.com)(?:video/)?(\d+)")
                 .unwrap();
             if let Some(caps) = re.captures(url) {
                 Ok(caps.get(1).unwrap().as_str().to_string())
@@ -70,10 +70,11 @@ pub fn extract_video_id(url: &str, platform: Platform) -> AppResult<String> {
             }
         }
         Platform::YouTube => {
-            // YouTube: watch?v=ID or youtu.be/ID
-            let re =
-                Regex::new(r"(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})")
-                    .unwrap();
+            // YouTube: watch?v=ID, youtu.be/ID, shorts/ID, embed/ID
+            let re = Regex::new(
+                r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/shorts/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})",
+            )
+            .unwrap();
             if let Some(caps) = re.captures(url) {
                 Ok(caps.get(1).unwrap().as_str().to_string())
             } else {
