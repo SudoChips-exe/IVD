@@ -73,9 +73,9 @@ async function main() {
     streamReader('frontend-err', frontendOnly.stderr)
 
     const f = await frontendOnly.exited
-    if (f.exitCode !== 0) {
-      console.error('[orchestrator] Frontend exited with code', f.exitCode)
-      process.exit(f.exitCode || 1)
+    if (f !== 0) {
+      console.error('[orchestrator] Frontend exited with code', f)
+      process.exit(f || 1)
     }
 
     console.log('Frontend exited normally')
@@ -135,16 +135,16 @@ async function main() {
 
   const [b, f] = await Promise.all([backend.exited, frontend.exited])
 
-  if (b.exitCode !== 0) {
-    console.error('[orchestrator] Backend exited with code', b.exitCode)
+  if (b !== 0) {
+    console.error('[orchestrator] Backend exited with code', b)
     killChild(frontend)
-    process.exit(b.exitCode || 1)
+    process.exit(b || 1)
   }
 
-  if (f.exitCode !== 0) {
-    console.error('[orchestrator] Frontend exited with code', f.exitCode)
+  if (f !== 0) {
+    console.error('[orchestrator] Frontend exited with code', f)
     killChild(backend)
-    process.exit(f.exitCode || 1)
+    process.exit(f || 1)
   }
 
   console.log('Both processes exited normally')
