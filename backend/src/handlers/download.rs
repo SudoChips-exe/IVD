@@ -34,9 +34,15 @@ pub async fn download_video(
         .build()
         .map_err(|e| AppError::InternalServerError(e.to_string()))?;
 
-    let upstream_response = client
+    let mut request_builder = client
         .get(&download_url)
-        .header("Accept", "video/*,*/*")
+        .header("Accept", "video/*,*/*");
+
+    if platform == crate::models::Platform::TikTok {
+        request_builder = request_builder.header(header::REFERER, &req.url);
+    }
+
+    let upstream_response = request_builder
         .send()
         .await
         .map_err(|e| AppError::NetworkError(e.to_string()))?;

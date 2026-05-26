@@ -10,7 +10,7 @@ import { useDownload } from './hooks/useDownload'
 
 function App() {
   const [url, setUrl] = useState('')
-  const { download, loading, progress, error, success } = useDownload()
+  const { download, loading, progress, error, success, retryCount } = useDownload()
 
   const handleDownload = async () => {
     if (url.trim()) {
@@ -42,7 +42,7 @@ function App() {
             loading={loading}
           />
 
-          {loading && <ProgressBar progress={progress} />}
+          {loading && <ProgressBar progress={progress} status={retryCount > 0 ? `Retry attempt ${retryCount}...` : undefined} />}
           
           {error && <ErrorMessage message={error} />}
           
