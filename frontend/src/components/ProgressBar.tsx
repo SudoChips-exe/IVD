@@ -1,4 +1,4 @@
-import React, { FC } from 'react'
+import { FC } from 'react'
 import '../styles/components.css'
 
 interface ProgressBarProps {
@@ -9,10 +9,10 @@ interface ProgressBarProps {
 const ProgressBar: FC<ProgressBarProps> = ({ progress, status }) => {
   const getStatusText = () => {
     if (status) return status
-    if (progress < 25) return 'Preparing...'
-    if (progress < 75) return 'Processing...'
-    if (progress < 100) return 'Finalizing...'
-    return 'Complete!'
+    if (progress < 25) return 'Initializing connection...'
+    if (progress < 75) return 'Downloading stream from host...'
+    if (progress < 100) return 'Packaging video file...'
+    return 'Done!'
   }
 
   return (

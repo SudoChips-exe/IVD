@@ -1,4 +1,5 @@
-import React, { FC } from 'react'
+import { FC } from 'react'
+import { DownloadIcon } from './Icons'
 import '../styles/components.css'
 
 interface DownloadButtonProps {
@@ -16,11 +17,12 @@ const DownloadButton: FC<DownloadButtonProps> = ({ onClick, disabled, loading })
     >
       {loading ? (
         <>
-          <span className="spinner"></span> Downloading...
+          <span className="spinner"></span> Downloading video...
         </>
       ) : (
         <>
-          ⬇️ Download Video
+          <DownloadIcon size={18} />
+          Download Video
         </>
       )}
     </button>

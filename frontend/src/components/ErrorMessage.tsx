@@ -1,4 +1,5 @@
-import React, { FC } from 'react'
+import { FC } from 'react'
+import { AlertTriangleIcon } from './Icons'
 import '../styles/components.css'
 
 interface ErrorMessageProps {
@@ -8,7 +9,7 @@ interface ErrorMessageProps {
 const ErrorMessage: FC<ErrorMessageProps> = ({ message }) => {
   return (
     <div className="error-message">
-      <span className="error-icon">❌</span>
+      <AlertTriangleIcon className="error-icon" size={20} />
       <span className="error-text">{message}</span>
     </div>
   )
