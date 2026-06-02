@@ -3,6 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun ./dev.ts"
+    "dev": "bun ./dev.ts",
+    "build": "cd frontend && bun run build",
+    "preview": "cd frontend && bun run build && bun run preview",
+    "test": "cd frontend && bun run test"
   }
 }

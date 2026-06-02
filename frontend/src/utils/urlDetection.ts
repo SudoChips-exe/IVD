@@ -17,8 +17,6 @@ export function detectPlatform(url: string): Platform {
     return 'Twitter'
   } else if (urlLower.includes('facebook.com') || urlLower.includes('fb.watch')) {
     return 'Facebook'
-  } else if (urlLower.includes('snapchat.com') || urlLower.includes('snap.com')) {
-    return 'Snapchat'
   } else {
     return 'Unknown'
   }

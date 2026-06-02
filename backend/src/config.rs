@@ -17,7 +17,6 @@ pub struct Config {
     pub twitter_bearer_token: Option<String>,
     pub facebook_api_key: Option<String>,
     pub facebook_app_id: Option<String>,
-    pub snapchat_api_key: Option<String>,
     
     // Rate Limiting
     pub max_requests_per_minute: u32,
@@ -48,7 +47,6 @@ impl Config {
             twitter_bearer_token: env::var("TWITTER_BEARER_TOKEN").ok(),
             facebook_api_key: env::var("FACEBOOK_API_KEY").ok(),
             facebook_app_id: env::var("FACEBOOK_APP_ID").ok(),
-            snapchat_api_key: env::var("SNAPCHAT_API_KEY").ok(),
             
             max_requests_per_minute: env::var("MAX_REQUESTS_PER_MINUTE")
                 .unwrap_or_else(|_| "60".to_string())

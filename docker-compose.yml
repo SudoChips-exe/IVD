@@ -1,33 +1,13 @@
-version: '3.8'
-
 services:
-  backend:
+  vidclaw:
     build:
       context: .
-      dockerfile: backend.Dockerfile
+      dockerfile: Dockerfile
     ports:
-      - "8080:8080"
+      - "80:80"
     environment:
-      - SERVER_HOST=0.0.0.0
-      - SERVER_PORT=8080
       - RUST_LOG=info
-      - FRONTEND_URL=http://localhost:5173
-    volumes:
-      - ./backend:/app/backend
-    command: cargo run --manifest-path /app/backend/Cargo.toml
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend.Dockerfile
-    ports:
-      - "5173:5173"
-    environment:
-      - VITE_API_URL=http://localhost:8080
-    volumes:
-      - ./frontend:/app/frontend
-      - /app/frontend/node_modules
-    command: bun run dev
-
-volumes:
-  node_modules:
+      - FRONTEND_URL=http://localhost
+      # For Instagram/Facebook: base64 -w0 cookies.txt
+      - COOKIES_B64=${COOKIES_B64:-}
+    restart: unless-stopped

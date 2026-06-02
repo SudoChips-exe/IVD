@@ -8,7 +8,6 @@ pub enum Platform {
     YouTube,
     Twitter,
     Facebook,
-    Snapchat,
     Unknown,
 }
 
@@ -21,7 +20,6 @@ impl Platform {
             Platform::YouTube => "youtube",
             Platform::Twitter => "twitter",
             Platform::Facebook => "facebook",
-            Platform::Snapchat => "snapchat",
             Platform::Unknown => "unknown",
         }
     }
@@ -33,7 +31,6 @@ impl Platform {
             "youtube" => Platform::YouTube,
             "twitter" | "x" => Platform::Twitter,
             "facebook" => Platform::Facebook,
-            "snapchat" => Platform::Snapchat,
             _ => Platform::Unknown,
         }
     }

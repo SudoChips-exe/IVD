@@ -40,8 +40,6 @@ pub fn detect_platform(url: &str) -> Platform {
         Platform::Twitter
     } else if url_lower.contains("facebook.com") || url_lower.contains("fb.watch") {
         Platform::Facebook
-    } else if url_lower.contains("snapchat.com") || url_lower.contains("snap.com") {
-        Platform::Snapchat
     } else {
         Platform::Unknown
     }
@@ -136,18 +134,6 @@ pub fn extract_video_id(url: &str, platform: Platform) -> AppResult<String> {
                 "Could not extract Facebook video ID".to_string(),
             ))
         }
-        Platform::Snapchat => {
-            // Snapchat: /add/ID or similar
-            let re = Regex::new(r"snapchat\.com/(?:add|clip)/([a-zA-Z0-9_-]+)")
-                .unwrap();
-            if let Some(caps) = re.captures(url) {
-                Ok(caps.get(1).unwrap().as_str().to_string())
-            } else {
-                Err(AppError::InvalidUrl(
-                    "Could not extract Snapchat ID".to_string(),
-                ))
-            }
-        }
         Platform::Unknown => {
             Err(AppError::PlatformNotSupported(
                 "Unknown platform".to_string(),
@@ -225,12 +211,6 @@ mod tests {
     fn detect_facebook() {
         assert_eq!(detect_platform("https://www.facebook.com/video/123"), Platform::Facebook);
         assert_eq!(detect_platform("https://fb.watch/abc123"), Platform::Facebook);
-    }
-
-    #[test]
-    fn detect_snapchat() {
-        assert_eq!(detect_platform("https://www.snapchat.com/add/user"), Platform::Snapchat);
-        assert_eq!(detect_platform("https://snap.com/abc"), Platform::Snapchat);
     }
 
     #[test]

@@ -158,8 +158,6 @@
 .platform-badge.youtube   { background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.16); color: #f87171; }
 .platform-badge.twitter   { background: var(--purple-muted); border: 1px solid rgba(139, 92, 246, 0.18); color: var(--purple); }
 .platform-badge.facebook  { background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.16); color: #60a5fa; }
-.platform-badge.snapchat  { background: rgba(234, 179, 8, 0.08); border: 1px solid rgba(234, 179, 8, 0.16); color: #fde68a; }
-
 /* ══ DOWNLOAD BUTTON ══ */
 .download-button {
   width: 100%;

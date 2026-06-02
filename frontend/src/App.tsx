@@ -28,7 +28,7 @@ function App() {
       <main className="main-content">
         <div className="hero-section" id="home">
           <h1>VIDCLAW</h1>
-          <p>Extract and download high-quality videos from Instagram, TikTok, YouTube, Twitter, Facebook, and Snapchat — no sign-up required.</p>
+          <p>Extract and download high-quality videos from Instagram, TikTok, YouTube, Twitter, and Facebook — no sign-up required.</p>
         </div>
 
         <div className="download-section">
@@ -70,7 +70,7 @@ function App() {
             </div>
             <div className="feature-text">
               <h3>All Major Platforms</h3>
-              <p>Download from Instagram, TikTok, YouTube, Twitter, Facebook, and Snapchat without restrictions.</p>
+              <p>Download from Instagram, TikTok, YouTube, Twitter, and Facebook without restrictions.</p>
             </div>
           </div>
 
@@ -110,7 +110,7 @@ function App() {
           <div className="faq-list">
             <div className="faq-item">
               <h3>Which platforms are supported?</h3>
-              <p>Instagram, TikTok, YouTube, Twitter, Facebook, and Snapchat.</p>
+              <p>Instagram, TikTok, YouTube, Twitter, and Facebook.</p>
             </div>
             <div className="faq-item">
               <h3>Is it free to use?</h3>

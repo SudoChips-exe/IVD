@@ -28,11 +28,6 @@ describe('detectPlatform', () => {
     expect(detectPlatform('https://fb.watch/abc')).toBe('Facebook')
   })
 
-  it('detects Snapchat', () => {
-    expect(detectPlatform('https://www.snapchat.com/p/abc')).toBe('Snapchat')
-    expect(detectPlatform('https://snap.com/abc')).toBe('Snapchat')
-  })
-
   it('returns Unknown for unrecognised URLs', () => {
     expect(detectPlatform('https://example.com/video')).toBe('Unknown')
     expect(detectPlatform('not-a-url')).toBe('Unknown')

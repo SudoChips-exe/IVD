@@ -4,7 +4,6 @@ export type Platform =
   | 'YouTube' 
   | 'Twitter' 
   | 'Facebook' 
-  | 'Snapchat'
   | 'Unknown'
 
 export interface DownloadRequest {

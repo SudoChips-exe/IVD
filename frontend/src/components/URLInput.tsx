@@ -8,7 +8,6 @@ import {
   YouTubeLogo, 
   TwitterLogo, 
   FacebookLogo, 
-  SnapchatLogo 
 } from './Icons'
 import '../styles/components.css'
 
@@ -31,8 +30,6 @@ const getPlatformConfig = (platform: string) => {
       return { className: 'twitter', logo: <TwitterLogo /> }
     case 'Facebook':
       return { className: 'facebook', logo: <FacebookLogo /> }
-    case 'Snapchat':
-      return { className: 'snapchat', logo: <SnapchatLogo /> }
     default:
       return { className: 'unknown', logo: null }
   }

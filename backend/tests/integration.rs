@@ -16,7 +16,6 @@ fn test_config() -> Config {
         twitter_bearer_token: None,
         facebook_api_key: None,
         facebook_app_id: None,
-        snapchat_api_key: None,
         max_requests_per_minute: 10000,
         max_requests_per_ip_per_minute: 10000,
         cache_ttl_seconds: 900,
