@@ -8,8 +8,10 @@ import ProgressBar from './components/ProgressBar'
 import Footer from './components/Footer'
 import { CheckCircleIcon, PlatformsIcon, AudioIcon, FastIcon, MobileIcon } from './components/Icons'
 import { useDownload } from './hooks/useDownload'
+import { useScrollSpy } from './hooks/useScrollSpy'
 
 function App() {
+  useScrollSpy()
   const [url, setUrl] = useState('')
   const { download, loading, progress, error, success, retryCount } = useDownload()
 
@@ -22,82 +24,105 @@ function App() {
   return (
     <div className="app-container">
       <Header />
-      
+
       <main className="main-content">
-        <div className="hero-section">
-          <h1>Universal Video Downloader</h1>
-          <p>Extract and download high-quality videos from Instagram, TikTok, YouTube, Twitter, Facebook, and Snapchat with a single click.</p>
+        <div className="hero-section" id="home">
+          <h1>VIDCLAW</h1>
+          <p>Extract and download high-quality videos from Instagram, TikTok, YouTube, Twitter, Facebook, and Snapchat — no sign-up required.</p>
         </div>
 
         <div className="download-section">
-          <URLInput 
-            value={url} 
+          <URLInput
+            value={url}
             onChange={setUrl}
             onSubmit={handleDownload}
             disabled={loading}
           />
-          
-          <DownloadButton 
+
+          <DownloadButton
             onClick={handleDownload}
             disabled={loading || !url.trim()}
             loading={loading}
           />
 
           {loading && (
-            <ProgressBar 
-              progress={progress} 
-              status={retryCount > 0 ? `Retry attempt ${retryCount} of 3...` : undefined} 
+            <ProgressBar
+              progress={progress}
+              status={retryCount > 0 ? `Retry attempt ${retryCount} of 3...` : undefined}
             />
           )}
-          
+
           {error && <ErrorMessage message={error} />}
-          
+
           {success && (
             <div className="success-message">
-              <CheckCircleIcon size={18} />
-              <span>Video file processed and downloaded successfully!</span>
+              <CheckCircleIcon size={16} />
+              <span>Video downloaded successfully.</span>
             </div>
           )}
         </div>
 
-        <div className="features-section" id="features">
+        <div className="section-label" id="features">Features</div>
+        <div className="features-section">
           <div className="feature">
             <div className="feature-icon-wrapper">
-              <PlatformsIcon size={22} />
+              <PlatformsIcon size={20} />
             </div>
             <div className="feature-text">
               <h3>All Major Platforms</h3>
-              <p>Download directly from Instagram, TikTok, YouTube, Twitter, Facebook, and Snapchat without restrictions.</p>
+              <p>Download from Instagram, TikTok, YouTube, Twitter, Facebook, and Snapchat without restrictions.</p>
             </div>
           </div>
-          
+
           <div className="feature">
             <div className="feature-icon-wrapper">
-              <AudioIcon size={22} />
+              <AudioIcon size={20} />
             </div>
             <div className="feature-text">
               <h3>Audio Preserved</h3>
-              <p>Retain full sound fidelity, high-quality audio formats, and sync for every video download.</p>
+              <p>Full sound fidelity and audio sync retained for every download.</p>
             </div>
           </div>
-          
+
           <div className="feature">
             <div className="feature-icon-wrapper">
-              <FastIcon size={22} />
+              <FastIcon size={20} />
             </div>
             <div className="feature-text">
               <h3>Direct Stream Speed</h3>
-              <p>Fast streaming processing bypassing intermediate storage, delivering your download instantly.</p>
+              <p>Streaming processing bypasses intermediate storage for instant delivery.</p>
             </div>
           </div>
-          
+
           <div className="feature">
             <div className="feature-icon-wrapper">
-              <MobileIcon size={22} />
+              <MobileIcon size={20} />
             </div>
             <div className="feature-text">
               <h3>Mobile Friendly</h3>
-              <p>Fully responsive viewport layout built to perform on Android, iOS, tablet, or desktop devices.</p>
+              <p>Fully responsive across Android, iOS, tablet, and desktop.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="section-label" id="faq">FAQ</div>
+        <div className="faq-section">
+          <div className="faq-list">
+            <div className="faq-item">
+              <h3>Which platforms are supported?</h3>
+              <p>Instagram, TikTok, YouTube, Twitter, Facebook, and Snapchat.</p>
+            </div>
+            <div className="faq-item">
+              <h3>Is it free to use?</h3>
+              <p>Yes — completely free with no account required.</p>
+            </div>
+            <div className="faq-item">
+              <h3>What video quality is downloaded?</h3>
+              <p>The highest quality available from the source platform.</p>
+            </div>
+            <div className="faq-item">
+              <h3>Is downloading videos legal?</h3>
+              <p>Only download content you own or have explicit permission to use. Respect platform terms of service and copyright law.</p>
             </div>
           </div>
         </div>

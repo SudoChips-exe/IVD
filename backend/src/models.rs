@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Platform {
     Instagram,
@@ -11,6 +12,7 @@ pub enum Platform {
     Unknown,
 }
 
+#[allow(dead_code)]
 impl Platform {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -52,18 +54,4 @@ pub struct VideoMetadata {
     pub thumbnail_url: String,
     pub original_platform: String,
     pub file_size_bytes: Option<u64>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DownloadResponse {
-    pub success: bool,
-    pub message: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ErrorResponse {
-    pub error: String,
-    pub message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retry_after: Option<u64>,
 }

@@ -44,7 +44,7 @@ export const useDownload = () => {
       // Start download with progress indication
       setState(prev => ({ ...prev, progress: 25 }))
       
-      const response = await api.downloadVideo(url)
+      const response = await api.downloadVideo(url.trim())
       
       setState(prev => ({ ...prev, progress: 75 }))
 

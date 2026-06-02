@@ -3,7 +3,7 @@ import '../styles/components.css'
 
 const Footer: React.FC = () => {
   return (
-    <footer className="footer">
+    <footer className="footer" id="contact">
       <div className="footer-content">
         <p>&copy; {new Date().getFullYear()} Universal Video Downloader. All rights reserved.</p>
         <p className="legal-disclaimer">

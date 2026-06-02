@@ -1,10 +1,14 @@
-use crate::models::Platform;
 use crate::error::{AppError, AppResult};
+#[cfg(test)]
+use crate::models::Platform;
+#[cfg(test)]
 use regex::Regex;
 
 /// Validate if a URL is a valid social media URL
 pub fn validate_url(url: &str) -> AppResult<()> {
-    if url.trim().is_empty() {
+    let url = url.trim();
+
+    if url.is_empty() {
         return Err(AppError::InvalidUrl("URL cannot be empty".to_string()));
     }
 
@@ -13,13 +17,16 @@ pub fn validate_url(url: &str) -> AppResult<()> {
     }
 
     if !url.starts_with("http://") && !url.starts_with("https://") {
-        return Err(AppError::InvalidUrl("URL must start with http:// or https://".to_string()));
+        return Err(AppError::InvalidUrl(format!(
+            "URL must start with http:// or https:// (got: {:?})",
+            &url[..url.len().min(40)]
+        )));
     }
 
     Ok(())
 }
 
-/// Detect platform from URL
+#[cfg(test)]
 pub fn detect_platform(url: &str) -> Platform {
     let url_lower = url.to_lowercase();
 
@@ -40,7 +47,7 @@ pub fn detect_platform(url: &str) -> Platform {
     }
 }
 
-/// Extract video ID from URL based on platform
+#[cfg(test)]
 pub fn extract_video_id(url: &str, platform: Platform) -> AppResult<String> {
     let url = url.trim();
 
@@ -149,7 +156,7 @@ pub fn extract_video_id(url: &str, platform: Platform) -> AppResult<String> {
     }
 }
 
-/// Generate a filename for downloaded video
+#[cfg(test)]
 pub fn generate_filename(platform: &Platform, video_id: &str) -> String {
     format!(
         "{}_{}_downloaded.mp4",
@@ -162,45 +169,141 @@ pub fn generate_filename(platform: &Platform, video_id: &str) -> String {
 mod tests {
     use super::*;
 
+    // ── validate_url ──────────────────────────────────────────────────────────
+
     #[test]
-    fn test_detect_platform_instagram() {
-        assert_eq!(
-            detect_platform("https://www.instagram.com/p/ABC123/"),
-            Platform::Instagram
-        );
+    fn validate_url_rejects_empty() {
+        assert!(validate_url("").is_err());
+        assert!(validate_url("   ").is_err());
     }
 
     #[test]
-    fn test_detect_platform_tiktok() {
-        assert_eq!(
-            detect_platform("https://www.tiktok.com/video/123456789"),
-            Platform::TikTok
-        );
+    fn validate_url_rejects_no_protocol() {
+        assert!(validate_url("instagram.com/reel/abc").is_err());
     }
 
     #[test]
-    fn test_detect_platform_youtube() {
-        assert_eq!(
-            detect_platform("https://www.youtube.com/watch?v=dQw4w9WgXcQ"),
-            Platform::YouTube
-        );
+    fn validate_url_rejects_too_long() {
+        let long = format!("https://instagram.com/{}", "a".repeat(2048));
+        assert!(validate_url(&long).is_err());
     }
 
     #[test]
-    fn test_extract_video_id_instagram() {
-        let id = extract_video_id(
-            "https://www.instagram.com/p/ABC123def456/",
-            Platform::Instagram,
-        )
-        .unwrap();
+    fn validate_url_accepts_http_and_https() {
+        assert!(validate_url("https://www.instagram.com/reel/abc").is_ok());
+        assert!(validate_url("http://www.tiktok.com/video/123").is_ok());
+    }
+
+    // ── detect_platform ───────────────────────────────────────────────────────
+
+    #[test]
+    fn detect_instagram() {
+        assert_eq!(detect_platform("https://www.instagram.com/p/ABC123/"), Platform::Instagram);
+        assert_eq!(detect_platform("https://ig.me/p/ABC123"), Platform::Instagram);
+    }
+
+    #[test]
+    fn detect_tiktok() {
+        assert_eq!(detect_platform("https://www.tiktok.com/@user/video/123"), Platform::TikTok);
+        assert_eq!(detect_platform("https://vm.tiktok.com/abc"), Platform::TikTok);
+        assert_eq!(detect_platform("https://vt.tiktok.com/abc"), Platform::TikTok);
+    }
+
+    #[test]
+    fn detect_youtube() {
+        assert_eq!(detect_platform("https://www.youtube.com/watch?v=dQw4w9WgXcQ"), Platform::YouTube);
+        assert_eq!(detect_platform("https://youtu.be/dQw4w9WgXcQ"), Platform::YouTube);
+    }
+
+    #[test]
+    fn detect_twitter_and_x() {
+        assert_eq!(detect_platform("https://twitter.com/user/status/123"), Platform::Twitter);
+        assert_eq!(detect_platform("https://x.com/user/status/123"), Platform::Twitter);
+    }
+
+    #[test]
+    fn detect_facebook() {
+        assert_eq!(detect_platform("https://www.facebook.com/video/123"), Platform::Facebook);
+        assert_eq!(detect_platform("https://fb.watch/abc123"), Platform::Facebook);
+    }
+
+    #[test]
+    fn detect_snapchat() {
+        assert_eq!(detect_platform("https://www.snapchat.com/add/user"), Platform::Snapchat);
+        assert_eq!(detect_platform("https://snap.com/abc"), Platform::Snapchat);
+    }
+
+    #[test]
+    fn detect_unknown() {
+        assert_eq!(detect_platform("https://example.com/video/123"), Platform::Unknown);
+    }
+
+    #[test]
+    fn detect_is_case_insensitive() {
+        assert_eq!(detect_platform("https://INSTAGRAM.COM/reel/abc"), Platform::Instagram);
+        assert_eq!(detect_platform("HTTPS://YOUTUBE.COM/watch?v=abc"), Platform::YouTube);
+    }
+
+    // ── extract_video_id ──────────────────────────────────────────────────────
+
+    #[test]
+    fn extract_instagram_reel_id() {
+        let id = extract_video_id("https://www.instagram.com/reel/CxYZ123abc/", Platform::Instagram).unwrap();
+        assert_eq!(id, "CxYZ123abc");
+    }
+
+    #[test]
+    fn extract_instagram_post_id() {
+        let id = extract_video_id("https://www.instagram.com/p/ABC123def456/", Platform::Instagram).unwrap();
         assert_eq!(id, "ABC123def456");
     }
 
     #[test]
-    fn test_generate_filename() {
-        let filename = generate_filename(&Platform::Instagram, "ABC123def456");
-        assert!(filename.contains("instagram"));
-        assert!(filename.contains("ABC123de"));
-        assert!(filename.ends_with(".mp4"));
+    fn extract_youtube_watch_id() {
+        let id = extract_video_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ", Platform::YouTube).unwrap();
+        assert_eq!(id, "dQw4w9WgXcQ");
+    }
+
+    #[test]
+    fn extract_youtube_short_url_id() {
+        let id = extract_video_id("https://youtu.be/dQw4w9WgXcQ", Platform::YouTube).unwrap();
+        assert_eq!(id, "dQw4w9WgXcQ");
+    }
+
+    #[test]
+    fn extract_tiktok_video_id() {
+        let id = extract_video_id("https://www.tiktok.com/@user/video/7123456789012345678", Platform::TikTok).unwrap();
+        assert_eq!(id, "7123456789012345678");
+    }
+
+    #[test]
+    fn extract_twitter_status_id() {
+        let id = extract_video_id("https://twitter.com/user/status/1234567890123", Platform::Twitter).unwrap();
+        assert_eq!(id, "1234567890123");
+    }
+
+    #[test]
+    fn extract_unknown_platform_errors() {
+        assert!(extract_video_id("https://example.com/video", Platform::Unknown).is_err());
+    }
+
+    // ── generate_filename ─────────────────────────────────────────────────────
+
+    #[test]
+    fn filename_format_is_correct() {
+        let f = generate_filename(&Platform::Instagram, "ABC123def456");
+        assert_eq!(f, "instagram_ABC123def4_downloaded.mp4");
+    }
+
+    #[test]
+    fn filename_truncates_long_id() {
+        let f = generate_filename(&Platform::YouTube, "averylongvideoidthatexceedstenlength");
+        assert_eq!(f, "youtube_averylongv_downloaded.mp4");
+    }
+
+    #[test]
+    fn filename_handles_short_id() {
+        let f = generate_filename(&Platform::TikTok, "short");
+        assert_eq!(f, "tiktok_short_downloaded.mp4");
     }
 }

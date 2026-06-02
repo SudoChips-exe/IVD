@@ -2,6 +2,7 @@ use actix_web::{error::ResponseError, http::StatusCode, HttpResponse};
 use serde_json::json;
 use std::fmt;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum AppError {
     // User errors (4xx)

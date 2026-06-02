@@ -64,7 +64,7 @@ const URLInput: FC<URLInputProps> = ({ value, onChange, onSubmit, disabled }) =>
         <LinkIcon className="input-icon-left" />
         <input
           type="text"
-          placeholder="Paste video URL here (Instagram, TikTok, YouTube, etc.)"
+          placeholder="Paste a video URL..."
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -77,7 +77,7 @@ const URLInput: FC<URLInputProps> = ({ value, onChange, onSubmit, disabled }) =>
           disabled={disabled}
           title="Paste from clipboard"
         >
-          <ClipboardIcon size={14} /> Paste
+          <ClipboardIcon size={14} /><span className="paste-label">Paste</span>
         </button>
       </div>
       
