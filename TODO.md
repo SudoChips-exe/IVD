@@ -1,108 +1,136 @@
 # VIDCLAW — Things To Be Done
 
+---
+
+## ✅ Completed
+
+- [x] SSE progress — real download speed, ETA, % from yt-dlp stdout
+- [x] Cookie upload UI — browser file upload → `POST /api/cookies`
+- [x] Proxy support — `YTDLP_PROXY` env var passed to yt-dlp
+- [x] Rate limiting per IP — global + per-IP middleware (already existed)
+- [x] Video format selector — Best / 1080p / 720p / 480p / 360p
+- [x] Cancel download — kills yt-dlp child process, cleans up temp file
+- [x] PWA — installable, service worker, manifest
+- [x] Smart error messages — private / geo / copyright / auth / no-video
+- [x] Docker + Render deployment config
+
+---
+
 ## Instagram & Facebook Downloads
 
 ### Problem
 Instagram and Facebook block requests from datacenter IPs (VPS/Render) even with valid cookies.
-Public content requires auth cookies; yt-dlp without them returns "empty media response".
+Requires two things: (1) a logged-in service account cookie, (2) residential proxy IP.
 
-### Fix (two parts)
+### Fix
 
-**Part 1 — Service account cookies**
-1. Create a throwaway Instagram account (separate from personal account)
-2. Create a throwaway Facebook account
+**Step 1 — Service account cookies**
+1. Create throwaway Instagram account (separate from personal)
+2. Create throwaway Facebook account
 3. Log into both in Chromium or Brave
-4. Install "Get cookies.txt LOCALLY" browser extension
-5. Visit `instagram.com` → export cookies → save as `instagram.txt`
-6. Visit `facebook.com` → export cookies → save as `facebook.txt`
+4. Install **"Get cookies.txt LOCALLY"** extension
+5. Visit `instagram.com` → export → save as `instagram.txt`
+6. Visit `facebook.com` → export → save as `facebook.txt`
 7. Combine: `cat instagram.txt facebook.txt > cookies.txt`
-8. Local: move to `~/.config/vidclaw/cookies.txt`
-9. Render: `base64 -w0 cookies.txt` → paste output as `COOKIES_B64` env var in dashboard
+8. **Option A — Local:** `mkdir -p ~/.config/vidclaw && mv cookies.txt ~/.config/vidclaw/cookies.txt`
+9. **Option B — Render/Docker:** encode → `base64 -w0 cookies.txt` → paste as `COOKIES_B64` env var
+10. **Option C — UI upload:** use the Settings → Cookie Upload section in the app
 
-**Part 2 — Residential proxy (required for Render/VPS)**
-- Without a residential proxy, Instagram blocks the server IP regardless of cookies
-- Sign up for a residential proxy (cheapest options: Webshare ~$3/mo, Proxyscrape ~$5/mo)
-- Add proxy support to `ytdlp.rs` — set `YTDLP_PROXY` env var:
-  ```
-  YTDLP_PROXY=http://user:pass@proxy.webshare.io:80
-  ```
-- Code change needed: pass `--proxy $YTDLP_PROXY` to yt-dlp when env var is set
-- Only apply proxy to Instagram and Facebook URLs (YouTube/Twitter/TikTok don't need it)
+**Step 2 — Residential proxy (required for server deployments)**
+
+Without residential proxy, Instagram/Facebook detect the datacenter IP and block regardless of cookies. Services like saveclip.app use this exact approach.
+
+1. Sign up for residential proxy:
+   - [Webshare.io](https://webshare.io) — ~$3/mo (cheapest)
+   - [Oxylabs](https://oxylabs.io) — more reliable, more expensive
+2. Get proxy URL: `http://user:pass@proxy.webshare.io:80`
+3. Set env var: `YTDLP_PROXY=http://user:pass@proxy.webshare.io:80`
+   - Local: add to `backend/.env`
+   - Render: set in dashboard → Environment
+4. Proxy is already wired in code — `ytdlp.rs` reads `YTDLP_PROXY` and passes `--proxy` to yt-dlp
 
 ### Status
-- [ ] Create service account cookies
-- [ ] Add proxy support to `backend/src/api/ytdlp.rs`
-- [ ] Set `COOKIES_B64` + `YTDLP_PROXY` on Render
+- [ ] Create service account cookies (throwaway Instagram + Facebook)
+- [ ] Upload/configure cookies (local file or Render env var or UI upload)
+- [ ] Sign up for residential proxy
+- [ ] Set `YTDLP_PROXY` env var (local `.env` or Render dashboard)
+- [ ] Test Instagram download
+- [ ] Test Facebook download
 
 ---
 
-## TikTok Fix
+## TikTok Fix (Local Only)
 
 ### Problem
-yt-dlp needs `curl-cffi` installed in the system Python for TikTok's JS challenge.
-Currently installed only in user Python (`~/.local`), not system Python (`/usr/lib/python3.x`).
+`curl-cffi` installed to user Python (`~/.local`) but yt-dlp uses system Python (`/usr/lib/python3.x`).
+TikTok's JS challenge fails without impersonation support.
 
-### Fix
+> **Note:** Docker image already installs `curl-cffi` at system level — TikTok works on Render.
+
+### Fix (local dev only)
+
 ```bash
 sudo pip install curl-cffi --break-system-packages
+
+# Verify
+yt-dlp --list-impersonate-targets
+# Should show Chrome / Firefox / Edge / Safari as "available" (not greyed out)
 ```
 
-Verify: `yt-dlp --list-impersonate-targets` — should show Chrome/Firefox/Edge as **available**.
-
 ### Status
-- [ ] Run `sudo pip install curl-cffi --break-system-packages` locally
-- [ ] Verify: `yt-dlp --list-impersonate-targets` shows Chrome/Firefox/Edge as available
-- [ ] Test TikTok download locally after fix
-- [ ] TikTok is included in the Docker image (already in `Dockerfile` via `pip3 install curl-cffi`)
-
-### Pre-deployment checklist for TikTok
-- [ ] Add `YTDLP_PROXY` env var if TikTok also blocks the server IP (less common than Instagram)
-- [ ] Test TikTok on Render after deploy — if blocked, apply same residential proxy fix
+- [ ] Run `sudo pip install curl-cffi --break-system-packages`
+- [ ] Verify impersonate targets available
+- [ ] Test TikTok download locally
 
 ---
 
 ## Deployment (Render)
 
 ### Pre-deployment Checklist
-- [ ] All tests passing (`bun run test` + `cargo test`)
-- [ ] Frontend builds clean (`bun run build`)
-- [ ] TikTok working locally (`sudo pip install curl-cffi --break-system-packages`)
-- [ ] Service account cookies ready (`COOKIES_B64`) — Instagram + Facebook
-- [ ] Residential proxy credentials ready (`YTDLP_PROXY`) — optional, Instagram/Facebook/TikTok
-- [ ] Update `FRONTEND_URL` in `render.yaml` to actual Render URL
+- [ ] All tests passing: `bun run test` + `cd backend && cargo test`
+- [ ] Frontend builds clean: `bun run build`
+- [ ] TikTok working locally (sudo pip install curl-cffi)
+- [ ] Service account cookies ready (`COOKIES_B64` or UI upload)
+- [ ] Residential proxy URL ready (`YTDLP_PROXY`)
+- [ ] Update `FRONTEND_URL` in `render.yaml` to actual Render URL (e.g. `https://vidclaw.onrender.com`)
 
-### Steps
-1. Push repo to GitHub
-2. Go to [render.com](https://render.com) → New Web Service → Connect GitHub repo
-3. Render auto-detects `render.yaml` → review settings
-4. Add environment variables in Render dashboard:
-   - `COOKIES_B64` — base64 encoded cookies.txt (Instagram + Facebook)
-   - `YTDLP_PROXY` — residential proxy URL (optional)
-   - `RUST_LOG=info`
-5. Deploy → wait for build (~5-10 min first time, Rust compile is slow)
-6. Test each platform after deploy
+### Deploy Steps
+
+```bash
+# 1. Push to GitHub
+git push origin main
+
+# 2. render.com → New Web Service → Connect repo
+# 3. Render detects render.yaml automatically
+# 4. Set in Render dashboard → Environment:
+#    COOKIES_B64=<output of: base64 -w0 cookies.txt>
+#    YTDLP_PROXY=http://user:pass@proxy.webshare.io:80
+#    RUST_LOG=info
+# 5. Deploy — first build takes ~5-10 min (Rust compile)
+```
 
 ### Known Render Free Tier Limitations
 - Spins down after 15 min inactivity → ~30s cold start on first request
-- 512MB RAM — sufficient for yt-dlp + ffmpeg on short videos
-- Ephemeral disk — `/tmp` files deleted on restart (fine, we delete them after serving)
-- No persistent storage — cookies set via env var only
+- 512MB RAM — fine for most videos; very long videos may OOM
+- Ephemeral disk — `/tmp` deleted on restart (fine, we delete temp files after serving)
 
-### Post-deployment
-- [ ] Run Lighthouse PWA audit on live URL
-- [ ] Test YouTube download
-- [ ] Test Twitter/X download
-- [ ] Test TikTok download (needs `curl-cffi` in Docker — already included)
-- [ ] Test Instagram download (needs `COOKIES_B64` + `YTDLP_PROXY`)
-- [ ] Test Facebook download (needs `COOKIES_B64` + `YTDLP_PROXY`)
-- [ ] Monitor Render logs for yt-dlp errors
+### Post-deployment Testing
+- [ ] Lighthouse PWA audit on live URL
+- [ ] YouTube download ✓
+- [ ] Twitter/X download ✓
+- [ ] TikTok download (curl-cffi in Docker)
+- [ ] Instagram download (needs cookies + proxy)
+- [ ] Facebook download (needs cookies + proxy)
+- [ ] Cancel download works
+- [ ] Cookie upload via UI works
+- [ ] Monitor Render logs for errors
 
 ---
 
-## Nice-to-Have (Future)
+## Future Ideas
 
-- [x] SSE progress endpoint — stream yt-dlp download progress to frontend instead of fake progress bar
-- [x] Cookie upload UI — let users upload their own cookies.txt via the app
-- [x] Proxy UI toggle — admin setting to enable/disable proxy per platform
-- [x] Rate limiting per IP — prevent abuse on public deployment
-- [x] Video format selector — let user choose quality (360p / 720p / 1080p)
+- [ ] SSE for cookie upload progress (large cookie files)
+- [ ] Multiple simultaneous downloads (job queue)
+- [ ] Download history (localStorage)
+- [ ] Audio-only download option (MP3 extraction)
+- [ ] Thumbnail preview before download

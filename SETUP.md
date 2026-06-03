@@ -1,183 +1,199 @@
-# Universal Social Media Video Downloader
+# VIDCLAW — Video Downloader
 
-This project provides a comprehensive backend and frontend for downloading videos from multiple social media platforms with audio preservation.
+Full-stack video downloader. Paste a URL → downloads MP4. Built with Rust + Actix-web backend and React + TypeScript frontend.
 
-## Project Status: Phase 3 & Phase 4 Complete ✅
+## Project Status: Phase 5 — Deployment Ready ✅
 
-### ✅ Completed
-- [x] Comprehensive README.md with features and setup instructions
-- [x] Detailed ARCHITECTURE.md with system design and platform strategies
-- [x] Rust backend project structure with:
-  - Actix-web HTTP server setup
-  - Configuration management system
-  - Modular platform adapter architecture
-  - Error handling framework
-  - Middleware (rate limiting implemented)
-  - URL validation & platform detection utilities
-  - Metadata cache module created and registered in backend state
-  - Video streaming handler with `Content-Type` and `Content-Disposition`
-- [x] React TypeScript frontend with:
-  - Modern UI with component-based architecture
-  - URL input with platform detection
-  - Download progress tracking
-  - Error handling
-  - Responsive mobile-friendly design
-- [x] Docker configuration for both backend and frontend
-- [x] Environment configuration templates
+**Last Updated**: June 3, 2026
 
-### 📋 Next Steps
+---
 
-#### Phase 2: Platform Integration (Priority Order)
-1. **Instagram Adapter** — Implemented page scraping + metadata extraction
-2. **TikTok Adapter** — Implemented page scraping + direct download URL extraction
-3. **YouTube Adapter** — Added metadata page fallback; full downloader pending yt-dlp / signature decoding
-4. **Twitter/X Adapter** — Added public URL metadata adapter for OG video extraction
-5. **Facebook Adapter** — Added public URL metadata adapter for OG video extraction
-6. **Snapchat Adapter** — Added public URL metadata adapter for OG video extraction
+## ✅ Completed
 
-#### Phase 3: Backend Features
-- [x] Implement actual video streaming to frontend (streaming handler with Content-Type and Content-Disposition)
-- [x] Add rate limiting middleware (implemented and registered)
-- [x] Implement response headers (Content-Disposition, MIME types) (fully implemented)
-- [x] Add metadata caching (created, wired into app state, ready for integration)
-- [x] Error handling & validation (comprehensive error types and responses)
+### Backend
+- Rust + Actix-web 4.x server
+- yt-dlp subprocess for all platform downloads (no API keys needed)
+- Job-based download system with SSE progress streaming
+- Real-time progress: percent, speed, ETA streamed from yt-dlp stdout
+- Download cancellation — kills yt-dlp child process on request
+- Quality selector — 1080p / 720p / 480p / 360p / Best
+- Browser cookie fallback chain (Chrome → Chromium → Firefox → Brave → Edge)
+- Cookie file support (`~/.config/vidclaw/cookies.txt`) for Instagram/Facebook
+- Cookie upload endpoint (`POST /api/cookies`) — upload via browser UI
+- Proxy support via `YTDLP_PROXY` env var
+- Per-IP + global rate limiting middleware
+- Smart error classification (private, geo-blocked, copyright, auth, no-video)
+- Docker deployment (nginx + Rust binary + yt-dlp + ffmpeg in single container)
+- Render deployment config (`render.yaml`)
 
-#### Phase 4: Frontend Integration
-- [x] Test against real backend endpoints (verified with curl and browser testing)
-- [x] Implement actual download streaming (functional blob download in browser)
-- [x] Add loading animations (progress bar with status messages)
-- [x] Mobile responsiveness testing (CSS media queries at 768px breakpoint)
-- [x] Error handling with retry logic (3 retries with exponential backoff)
+### Frontend
+- React + TypeScript + Vite
+- Platform detection badge (Instagram, TikTok, YouTube, Twitter, Facebook)
+- Real SSE progress bar with speed + ETA
+- Cancel button during download
+- Quality selector pill buttons
+- Cookie upload UI (Settings section)
+- PWA — installable, service worker, offline UI
+- Scroll-spy URL updates as user scrolls
+- Responsive — mobile first
 
-#### Phase 5: Deployment
-- [ ] Docker build & test
-- [ ] Cloud deployment setup
-- [ ] Environment configuration
-- [ ] Performance optimization
+### Tests
+- Backend: 57 tests (22 unit + 22 unit-bin + 13 integration) — all passing
+- Frontend: 33 tests (urlDetection + useDownload SSE flow + PWA manifest) — all passing
+
+---
 
 ## Quick Start
 
 ### Local Development
 
-**Backend (Terminal 1):**
 ```bash
-cd backend
-cargo run
+# Terminal 1 — backend
+cd backend && cargo run
 # Runs on http://localhost:8080
-```
 
-**Frontend (Terminal 2):**
-```bash
-cd frontend
-bun install
-bun run dev
+# Terminal 2 — frontend
+cd frontend && bun install && bun run dev
 # Runs on http://localhost:5173
 ```
 
-You can also start both services from the repository root with the Bun orchestrator:
-
+Or both from root:
 ```bash
-# From repo root
-bun install    # (run once to ensure Bun can execute dev.ts)
 bun run dev
-# Runs backend (cargo run) and frontend (bun run dev) concurrently
 ```
 
-Docker: the project provides a Bun-based `frontend.Dockerfile` and the frontend service in `docker-compose.yml`.
+### Run Tests
 
-### Docker Compose
 ```bash
-docker-compose up --build
+# All tests from root
+bun run test          # frontend (33 tests)
+cd backend && cargo test  # backend (57 tests)
 ```
+
+### Build for Production
+
+```bash
+bun run build         # builds frontend → frontend/dist/
+cd backend && cargo build --release
+```
+
+---
 
 ## Project Structure
 
 ```
 IVD/
-├── README.md                 # User documentation
-├── ARCHITECTURE.md           # System design document
-├── .gitignore
-├── docker-compose.yml
-├── Dockerfile
-├── backend.Dockerfile
-├── frontend.Dockerfile
+├── SETUP.md              ← this file
+├── TODO.md               ← pending tasks
+├── CONTEXT.md            ← full context for resuming on another machine
+├── Dockerfile            ← single container: nginx + Rust + yt-dlp + ffmpeg
+├── render.yaml           ← Render deployment config
+├── nginx.conf            ← nginx template ($PORT substituted at runtime)
+├── entrypoint.sh         ← startup: decode cookies, configure nginx, start server
+├── docker-compose.yml    ← local Docker testing
 │
-├── backend/                  # Rust backend
+├── backend/
 │   ├── Cargo.toml
-│   ├── .env.example
-│   └── src/
-│       ├── main.rs
-│       ├── lib.rs
-│       ├── config.rs
-│       ├── error.rs
-│       ├── models.rs
-│       ├── util.rs
-│       ├── api/              # Platform adapters (IN DEVELOPMENT)
-│       ├── handlers/         # HTTP endpoints
-│       └── middleware/       # Rate limiting, etc.
+│   ├── src/
+│   │   ├── main.rs           # server setup, app state
+│   │   ├── lib.rs            # module exports
+│   │   ├── jobs.rs           # job store, JobEvent enum, cancel flag
+│   │   ├── config.rs         # env var config
+│   │   ├── error.rs          # AppError → HTTP status
+│   │   ├── models.rs         # DownloadRequest, Platform enum
+│   │   ├── util.rs           # validate_url, detect_platform (test-only)
+│   │   ├── cache.rs          # metadata cache (reserved)
+│   │   ├── api/ytdlp.rs      # yt-dlp subprocess, progress parsing, cancel
+│   │   ├── handlers/
+│   │   │   ├── download.rs   # POST /api/download → { job_id }
+│   │   │   ├── progress.rs   # GET /api/progress/{job_id} — SSE
+│   │   │   ├── file_delivery.rs # GET /api/file/{job_id} — binary
+│   │   │   ├── cancel.rs     # POST /api/cancel/{job_id}
+│   │   │   ├── cookies.rs    # POST/DELETE /api/cookies, GET /api/cookies/status
+│   │   │   └── health.rs     # GET /api/health
+│   │   └── middleware/rate_limit.rs
+│   └── tests/integration.rs
 │
-└── frontend/                 # React + TypeScript
+└── frontend/
     ├── package.json
-    ├── vite.config.ts
+    ├── vite.config.ts        # Vite + PWA plugin config
     ├── tsconfig.json
     ├── index.html
     └── src/
-        ├── main.tsx
         ├── App.tsx
-        ├── components/       # Reusable UI components
-        ├── hooks/            # Custom React hooks
-        ├── services/         # API communication
-        ├── types/            # TypeScript definitions
-        ├── styles/           # CSS styling
-        └── utils/            # Helper functions
+        ├── hooks/
+        │   ├── useDownload.ts   # SSE-based download + cancel
+        │   └── useScrollSpy.ts  # URL updates on scroll
+        ├── components/
+        │   ├── URLInput.tsx
+        │   ├── QualitySelector.tsx
+        │   ├── DownloadButton.tsx
+        │   ├── ProgressBar.tsx  # shows speed + ETA
+        │   ├── CookieUpload.tsx # cookie file upload UI
+        │   ├── Header.tsx
+        │   ├── Footer.tsx
+        │   ├── ErrorMessage.tsx
+        │   └── Icons.tsx
+        ├── services/api.ts      # axios client, all endpoints
+        ├── utils/urlDetection.ts
+        ├── types/index.ts
+        └── test/                # urlDetection, useDownload, pwa tests
 ```
-
-## Key Architecture Decisions
-
-1. **Rust Backend** — High performance, memory-safe, ideal for streaming
-2. **React Frontend** — Modern, component-driven, responsive
-3. **Modular Platform Adapters** — Easy to add/remove/modify platform support
-4. **Direct Streaming** — No server-side storage, scalable approach
-5. **Official APIs First** — Legal compliance, with fallback options
-
-## Environment Configuration
-
-Copy `.env.example` to `.env` in the backend directory and add your API keys:
-
-```bash
-cp backend/.env.example backend/.env
-```
-
-Then add your platform API keys as needed.
-
-## Testing Checklist
-
-Before moving to the next phase, verify:
-
-- [x] Backend compiles without errors (`cargo build`)
-- [x] Backend tests pass (`cargo test` with 6 passed; warnings remain for unused enum variants and model structs)
-- [ ] Frontend dependencies install (`npm install`)
-- [ ] URL validation works correctly (test various platform URLs)
-- [ ] Platform detection returns correct results
-- [ ] Error messages are clear and helpful
-- [ ] Responsive design works on mobile
-
-## Contributing
-
-When implementing platform adapters:
-
-1. Follow the `PlatformAdapter` trait interface
-2. Include proper error handling
-3. Preserve audio in all downloads
-4. Add unit tests for URL parsing
-5. Document rate limit requirements
-6. Test with real URLs
-
-## License
-
-MIT License — see LICENSE file for details
 
 ---
 
-**Last Updated**: May 26, 2026  
-**Status**: Phase 3 & 4 Complete. Ready for Phase 5 deployment and platform refinement.
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/download` | Start download → `{ job_id }` |
+| GET | `/api/progress/{job_id}` | SSE stream (progress/done/error/cancelled) |
+| GET | `/api/file/{job_id}` | Fetch binary after done event |
+| POST | `/api/cancel/{job_id}` | Cancel running download |
+| POST | `/api/cookies` | Upload cookies.txt content (plain text body) |
+| DELETE | `/api/cookies` | Remove stored cookies |
+| GET | `/api/cookies/status` | `{ active: bool }` |
+| GET | `/api/health` | Health check |
+
+---
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SERVER_HOST` | `0.0.0.0` | Backend bind address |
+| `SERVER_PORT` | `8080` | Internal backend port |
+| `FRONTEND_URL` | `http://localhost:5173` | CORS origin |
+| `RUST_LOG` | `info` | Log level |
+| `COOKIES_B64` | — | Base64-encoded cookies.txt (Docker/Render) |
+| `YTDLP_PROXY` | — | Residential proxy URL for blocked platforms |
+| `PORT` | `80` | Public port (Render injects this) |
+| `VITE_API_URL` | `http://localhost:8080` | Frontend API base (empty = relative in Docker) |
+
+---
+
+## Platform Support
+
+| Platform | Local | Render/VPS | Notes |
+|----------|-------|------------|-------|
+| YouTube | ✅ | ✅ | No auth needed |
+| Twitter/X | ✅ | ✅ | HLS → MP4 via ffmpeg |
+| TikTok | ⚠️ | ✅ | Local: `sudo pip install curl-cffi --break-system-packages` |
+| Instagram | ❌ | ❌ | Needs service account cookies + residential proxy |
+| Facebook | ❌ | ❌ | Needs service account cookies + residential proxy |
+
+---
+
+## Deployment (Render)
+
+```bash
+# 1. Push to GitHub
+# 2. render.com → New Web Service → connect repo
+# 3. Render auto-detects render.yaml
+# 4. Set env vars in Render dashboard:
+#    COOKIES_B64=<base64 of cookies.txt>
+#    YTDLP_PROXY=http://user:pass@proxy.webshare.io:80
+# 5. Deploy (first build ~5-10 min, Rust compile slow)
+```
+
+See `TODO.md` for Instagram/Facebook fix steps before deploying.
