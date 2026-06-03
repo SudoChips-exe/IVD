@@ -101,8 +101,8 @@ Verify: `yt-dlp --list-impersonate-targets` — should show Chrome/Firefox/Edge 
 
 ## Nice-to-Have (Future)
 
-- [ ] SSE progress endpoint — stream yt-dlp download progress to frontend instead of fake progress bar
-- [ ] Cookie upload UI — let users upload their own cookies.txt via the app
-- [ ] Proxy UI toggle — admin setting to enable/disable proxy per platform
-- [ ] Rate limiting per IP — prevent abuse on public deployment
-- [ ] Video format selector — let user choose quality (360p / 720p / 1080p)
+- [x] SSE progress endpoint — stream yt-dlp download progress to frontend instead of fake progress bar
+- [x] Cookie upload UI — let users upload their own cookies.txt via the app
+- [x] Proxy UI toggle — admin setting to enable/disable proxy per platform
+- [x] Rate limiting per IP — prevent abuse on public deployment
+- [x] Video format selector — let user choose quality (360p / 720p / 1080p)

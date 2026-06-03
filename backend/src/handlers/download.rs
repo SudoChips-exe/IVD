@@ -1,60 +1,36 @@
-use actix_web::{http::header, web, HttpResponse};
-use tokio::io::AsyncReadExt;
+use actix_web::{web, HttpResponse};
+use serde::Serialize;
+use uuid::Uuid;
 
 use crate::api::ytdlp;
 use crate::config::Config;
-use crate::error::{AppError, AppResult};
+use crate::error::AppResult;
+use crate::jobs::JobStore;
 use crate::models::DownloadRequest;
 use crate::util;
 
+#[derive(Serialize)]
+struct StartResponse {
+    job_id: String,
+}
+
 pub async fn download_video(
     _config: web::Data<Config>,
+    jobs: web::Data<JobStore>,
     req: web::Json<DownloadRequest>,
 ) -> AppResult<HttpResponse> {
-    let url = req.url.trim();
-    util::validate_url(url)?;
+    let url = req.url.trim().to_string();
+    util::validate_url(&url)?;
 
-    log::info!("Download request: {}", url);
+    let quality = req.quality.clone();
+    log::info!("Download job started: {} (quality: {})", url, quality.as_deref().unwrap_or("best"));
 
-    let extracted = ytdlp::extract(url).await.map_err(|e| {
-        log::warn!("yt-dlp failed for {}: {:?}", req.url, e);
-        e
-    })?;
+    let job_id = Uuid::new_v4().to_string();
+    let (tx, result_store, cancelled) = jobs.create(&job_id).await;
 
-    let file_path = extracted.file_path.clone();
-    let filename = extracted.filename.clone();
-
-    log::info!("Serving {} ({} bytes)", filename, {
-        tokio::fs::metadata(&file_path)
-            .await
-            .map(|m| m.len())
-            .unwrap_or(0)
+    tokio::spawn(async move {
+        ytdlp::extract_with_progress(url, quality, tx, result_store, cancelled).await;
     });
 
-    // Read file and stream to client in chunks
-    let file_size = tokio::fs::metadata(&file_path)
-        .await
-        .map(|m| m.len())
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
-
-    let mut file = tokio::fs::File::open(&file_path)
-        .await
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
-
-    let mut body = Vec::with_capacity(file_size as usize);
-    file.read_to_end(&mut body)
-        .await
-        .map_err(|e| AppError::InternalServerError(e.to_string()))?;
-
-    // Delete temp file after reading into memory
-    let _ = tokio::fs::remove_file(&file_path).await;
-
-    Ok(HttpResponse::Ok()
-        .append_header((header::CONTENT_TYPE, "video/mp4"))
-        .append_header((
-            header::CONTENT_DISPOSITION,
-            format!("attachment; filename=\"{}\"", filename),
-        ))
-        .append_header((header::CONTENT_LENGTH, body.len().to_string()))
-        .body(body))
+    Ok(HttpResponse::Ok().json(StartResponse { job_id }))
 }

@@ -2,10 +2,12 @@ import { useState } from 'react'
 import './App.css'
 import Header from './components/Header'
 import URLInput from './components/URLInput'
+import QualitySelector, { Quality } from './components/QualitySelector'
 import DownloadButton from './components/DownloadButton'
-import ErrorMessage from './components/ErrorMessage'
 import ProgressBar from './components/ProgressBar'
+import ErrorMessage from './components/ErrorMessage'
 import Footer from './components/Footer'
+import CookieUpload from './components/CookieUpload'
 import { CheckCircleIcon, PlatformsIcon, AudioIcon, FastIcon, MobileIcon } from './components/Icons'
 import { useDownload } from './hooks/useDownload'
 import { useScrollSpy } from './hooks/useScrollSpy'
@@ -13,11 +15,12 @@ import { useScrollSpy } from './hooks/useScrollSpy'
 function App() {
   useScrollSpy()
   const [url, setUrl] = useState('')
-  const { download, loading, progress, error, success, retryCount } = useDownload()
+  const [quality, setQuality] = useState<Quality>('best')
+  const { download, cancel, loading, progress, speed, eta, status, error, success } = useDownload()
 
   const handleDownload = async () => {
     if (url.trim()) {
-      await download(url)
+      await download(url, quality === 'best' ? undefined : quality)
     }
   }
 
@@ -39,6 +42,8 @@ function App() {
             disabled={loading}
           />
 
+          <QualitySelector value={quality} onChange={setQuality} disabled={loading} />
+
           <DownloadButton
             onClick={handleDownload}
             disabled={loading || !url.trim()}
@@ -46,10 +51,17 @@ function App() {
           />
 
           {loading && (
-            <ProgressBar
-              progress={progress}
-              status={retryCount > 0 ? `Retry attempt ${retryCount} of 3...` : undefined}
-            />
+            <>
+              <ProgressBar
+                progress={progress}
+                status={status}
+                speed={speed}
+                eta={eta}
+              />
+              <button className="cancel-btn" onClick={cancel}>
+                Cancel
+              </button>
+            </>
           )}
 
           {error && <ErrorMessage message={error} />}
@@ -89,8 +101,8 @@ function App() {
               <FastIcon size={20} />
             </div>
             <div className="feature-text">
-              <h3>Direct Stream Speed</h3>
-              <p>Streaming processing bypasses intermediate storage for instant delivery.</p>
+              <h3>Real-Time Progress</h3>
+              <p>Live download speed, ETA, and progress streamed directly from the server.</p>
             </div>
           </div>
 
@@ -118,13 +130,22 @@ function App() {
             </div>
             <div className="faq-item">
               <h3>What video quality is downloaded?</h3>
-              <p>The highest quality available from the source platform.</p>
+              <p>Choose from Best, 1080p, 720p, 480p, or 360p. "Best" downloads the highest quality available from the source platform.</p>
+            </div>
+            <div className="faq-item">
+              <h3>Why do Instagram downloads fail?</h3>
+              <p>Instagram requires authentication. Upload your cookies.txt file using the settings below.</p>
             </div>
             <div className="faq-item">
               <h3>Is downloading videos legal?</h3>
               <p>Only download content you own or have explicit permission to use. Respect platform terms of service and copyright law.</p>
             </div>
           </div>
+        </div>
+
+        <div className="section-label" id="contact">Settings</div>
+        <div className="settings-section">
+          <CookieUpload />
         </div>
       </main>
 

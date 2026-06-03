@@ -4,13 +4,39 @@ import { useDownload } from '../hooks/useDownload'
 import { api } from '../services/api'
 
 vi.mock('../services/api', () => ({
-  api: { downloadVideo: vi.fn() },
+  api: {
+    startDownload: vi.fn(),
+    getProgressUrl: vi.fn(),
+    downloadFile: vi.fn(),
+  },
 }))
 
-const mockDownloadVideo = vi.mocked(api.downloadVideo)
+const mockStart = vi.mocked(api.startDownload)
+const mockGetUrl = vi.mocked(api.getProgressUrl)
+const mockFile = vi.mocked(api.downloadFile)
 
-function makeBlob(size = 100, type = 'video/mp4') {
-  return new Blob([new Uint8Array(size)], { type })
+// ── EventSource mock ───────────────────────────────────────────────────────────
+
+let lastES: MockES | null = null
+
+class MockES {
+  onmessage: ((e: { data: string }) => void) | null = null
+  onerror: ((e: Event) => void) | null = null
+  close = vi.fn()
+  constructor(_url: string) { lastES = this }
+  emit(payload: object) { this.onmessage?.({ data: JSON.stringify(payload) }) }
+  fail() { this.onerror?.(new Event('error')) }
+}
+
+// Flush microtasks (works regardless of fake timers — Promise is not intercepted)
+const flushMicrotasks = () => act(async () => {
+  await Promise.resolve()
+  await Promise.resolve()
+  await Promise.resolve()
+})
+
+function makeBlob(size = 100) {
+  return new Blob([new Uint8Array(size)], { type: 'video/mp4' })
 }
 
 describe('useDownload', () => {
@@ -18,9 +44,13 @@ describe('useDownload', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    lastES = null
     lastAnchor = null
 
-    // Intercept createElement: return real element, but capture anchor + stub click
+    // @ts-expect-error replace browser EventSource with mock
+    global.EventSource = MockES
+    mockGetUrl.mockReturnValue('http://localhost/progress/job-1')
+
     const realCreate = document.createElement.bind(document)
     vi.spyOn(document, 'createElement').mockImplementation((tag: string, ...args: any[]) => {
       const el = realCreate(tag, ...args)
@@ -45,10 +75,12 @@ describe('useDownload', () => {
   it('starts with idle state', () => {
     const { result } = renderHook(() => useDownload())
     expect(result.current.loading).toBe(false)
+    expect(result.current.progress).toBe(0)
     expect(result.current.error).toBeNull()
     expect(result.current.success).toBe(false)
-    expect(result.current.progress).toBe(0)
-    expect(result.current.retryCount).toBe(0)
+    expect(result.current.speed).toBeNull()
+    expect(result.current.eta).toBeNull()
+    expect(result.current.status).toBeNull()
   })
 
   // ── Validation ─────────────────────────────────────────────────────────────
@@ -58,129 +90,180 @@ describe('useDownload', () => {
     await act(async () => { await result.current.download('') })
     expect(result.current.error).toBe('Please enter a valid URL')
     expect(result.current.loading).toBe(false)
-    expect(mockDownloadVideo).not.toHaveBeenCalled()
+    expect(mockStart).not.toHaveBeenCalled()
   })
 
   it('rejects whitespace-only URL', async () => {
     const { result } = renderHook(() => useDownload())
     await act(async () => { await result.current.download('   ') })
     expect(result.current.error).toBe('Please enter a valid URL')
-    expect(mockDownloadVideo).not.toHaveBeenCalled()
+    expect(mockStart).not.toHaveBeenCalled()
   })
 
   // ── Successful download ────────────────────────────────────────────────────
 
-  it('triggers link click and sets success state', async () => {
+  it('full success flow: progress → done → file download', async () => {
     const blob = makeBlob()
-    mockDownloadVideo.mockResolvedValueOnce({
+    mockStart.mockResolvedValueOnce({ job_id: 'job-1' })
+    mockFile.mockResolvedValueOnce({
       data: blob,
-      headers: { 'content-disposition': 'attachment; filename="instagram_abc_downloaded.mp4"' },
+      headers: { 'content-disposition': 'attachment; filename="video.mp4"' },
     } as any)
 
     const { result } = renderHook(() => useDownload())
-    await act(async () => {
-      await result.current.download('https://www.instagram.com/reel/abc123')
-    })
 
-    expect(mockDownloadVideo).toHaveBeenCalledWith('https://www.instagram.com/reel/abc123')
-    expect(window.URL.createObjectURL).toHaveBeenCalledWith(blob)
-    expect(lastAnchor?.href).toBe('blob:fake-url')
-    expect(lastAnchor?.download).toBe('instagram_abc_downloaded.mp4')
-    expect(lastAnchor?.click).toHaveBeenCalledOnce()
-    expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:fake-url')
+    let p!: Promise<void>
+    act(() => { p = result.current.download('https://youtube.com/watch?v=abc') })
+
+    await flushMicrotasks()
+    expect(lastES).not.toBeNull()
+
+    act(() => { lastES!.emit({ type: 'progress', percent: 60, speed: '2MiB/s', eta: '00:05' }) })
+    expect(result.current.progress).toBe(60)
+    expect(result.current.speed).toBe('2MiB/s')
+    expect(result.current.eta).toBe('00:05')
+
+    act(() => { lastES!.emit({ type: 'done', filename: 'video.mp4' }) })
+    await act(async () => { await p })
+
     expect(result.current.success).toBe(true)
-    expect(result.current.loading).toBe(false)
     expect(result.current.progress).toBe(100)
+    expect(result.current.loading).toBe(false)
     expect(result.current.error).toBeNull()
+    expect(mockFile).toHaveBeenCalledWith('job-1')
+    expect(lastAnchor?.download).toBe('video.mp4')
+    expect(lastAnchor?.click).toHaveBeenCalledOnce()
   })
 
-  it('uses default filename when content-disposition header is absent', async () => {
-    mockDownloadVideo.mockResolvedValueOnce({ data: makeBlob(), headers: {} } as any)
+  it('shows authenticating status event', async () => {
+    mockStart.mockResolvedValueOnce({ job_id: 'job-1' })
+    mockFile.mockResolvedValueOnce({ data: makeBlob(), headers: {} } as any)
+
     const { result } = renderHook(() => useDownload())
-    await act(async () => {
-      await result.current.download('https://www.youtube.com/watch?v=abc')
-    })
-    expect(lastAnchor?.download).toBe('downloaded_video.mp4')
+    let p!: Promise<void>
+    act(() => { p = result.current.download('https://instagram.com/reel/abc') })
+    await flushMicrotasks()
+
+    act(() => { lastES!.emit({ type: 'authenticating', method: 'chromium' }) })
+    expect(result.current.status).toContain('chromium')
+
+    act(() => { lastES!.emit({ type: 'done', filename: 'v.mp4' }) })
+    await act(async () => { await p })
     expect(result.current.success).toBe(true)
   })
 
-  it('uses default filename when content-disposition has no filename match', async () => {
-    mockDownloadVideo.mockResolvedValueOnce({
-      data: makeBlob(),
-      headers: { 'content-disposition': 'attachment' },
-    } as any)
+  it('shows merging status at 95%', async () => {
+    mockStart.mockResolvedValueOnce({ job_id: 'job-1' })
+    mockFile.mockResolvedValueOnce({ data: makeBlob(), headers: {} } as any)
+
     const { result } = renderHook(() => useDownload())
-    await act(async () => {
-      await result.current.download('https://www.tiktok.com/@user/video/123')
-    })
+    let p!: Promise<void>
+    act(() => { p = result.current.download('https://youtube.com/watch?v=abc') })
+    await flushMicrotasks()
+
+    act(() => { lastES!.emit({ type: 'merging' }) })
+    expect(result.current.progress).toBe(95)
+    expect(result.current.status).toContain('Merging')
+
+    act(() => { lastES!.emit({ type: 'done', filename: 'v.mp4' }) })
+    await act(async () => { await p })
+    expect(result.current.success).toBe(true)
+  })
+
+  it('uses default filename when header absent', async () => {
+    mockStart.mockResolvedValueOnce({ job_id: 'job-1' })
+    mockFile.mockResolvedValueOnce({ data: makeBlob(), headers: {} } as any)
+
+    const { result } = renderHook(() => useDownload())
+    let p!: Promise<void>
+    act(() => { p = result.current.download('https://youtube.com/watch?v=abc') })
+    await flushMicrotasks()
+    act(() => { lastES!.emit({ type: 'done', filename: 'v.mp4' }) })
+    await act(async () => { await p })
+
     expect(lastAnchor?.download).toBe('downloaded_video.mp4')
   })
 
   it('resets success after 5 seconds', async () => {
-    vi.useFakeTimers()
-    mockDownloadVideo.mockResolvedValueOnce({ data: makeBlob(), headers: {} } as any)
-    const { result } = renderHook(() => useDownload())
+    vi.useFakeTimers()  // before everything so hook's setTimeout uses fake timer
+    mockStart.mockResolvedValueOnce({ job_id: 'job-1' })
+    mockFile.mockResolvedValueOnce({ data: makeBlob(), headers: {} } as any)
 
-    await act(async () => {
-      await result.current.download('https://www.instagram.com/reel/abc')
-    })
+    const { result } = renderHook(() => useDownload())
+    let p!: Promise<void>
+    act(() => { p = result.current.download('https://youtube.com/watch?v=abc') })
+    // flushMicrotasks uses Promise.resolve() — safe with fake timers (only setTimeout is mocked)
+    await flushMicrotasks()
+
+    act(() => { lastES!.emit({ type: 'done', filename: 'v.mp4' }) })
+    await act(async () => { await p })
     expect(result.current.success).toBe(true)
 
     await act(async () => { vi.advanceTimersByTime(5000) })
     expect(result.current.success).toBe(false)
   })
 
-  // ── Error — empty blob (retryable) ─────────────────────────────────────────
+  // ── Error cases ────────────────────────────────────────────────────────────
 
-  it('errors on empty blob and retries 3 times', async () => {
-    vi.useFakeTimers()
-    mockDownloadVideo.mockResolvedValue({ data: makeBlob(0), headers: {} } as any)
+  it('SSE error event sets error state', async () => {
+    mockStart.mockResolvedValueOnce({ job_id: 'job-1' })
+
     const { result } = renderHook(() => useDownload())
+    let p!: Promise<void>
+    act(() => { p = result.current.download('https://instagram.com/reel/abc') })
+    await flushMicrotasks()
 
-    await act(async () => {
-      const p = result.current.download('https://www.instagram.com/reel/abc')
-      await vi.runAllTimersAsync()
-      await p
-    })
+    act(() => { lastES!.emit({ type: 'error', message: 'This video requires authentication.' }) })
+    await act(async () => { await p })
 
+    expect(result.current.error).toContain('authentication')
     expect(result.current.loading).toBe(false)
-    expect(result.current.error).toContain('Downloaded file is empty')
-    expect(mockDownloadVideo).toHaveBeenCalledTimes(4) // initial + 3 retries
   })
 
-  // ── Error — network failure (retryable) ────────────────────────────────────
+  it('EventSource connection error sets error state', async () => {
+    mockStart.mockResolvedValueOnce({ job_id: 'job-1' })
 
-  it('retries on network error and shows final error after max retries', async () => {
-    vi.useFakeTimers()
-    mockDownloadVideo.mockRejectedValue(new Error('Network timeout'))
     const { result } = renderHook(() => useDownload())
+    let p!: Promise<void>
+    act(() => { p = result.current.download('https://youtube.com/watch?v=abc') })
+    await flushMicrotasks()
 
-    await act(async () => {
-      const p = result.current.download('https://www.tiktok.com/@user/video/123')
-      await vi.runAllTimersAsync()
-      await p
-    })
+    act(() => { lastES!.fail() })
+    await act(async () => { await p })
 
+    expect(result.current.error).toContain('Connection lost')
     expect(result.current.loading).toBe(false)
-    expect(result.current.error).toContain('Network timeout')
-    expect(mockDownloadVideo).toHaveBeenCalledTimes(4) // initial + 3 retries
   })
 
-  it('does not retry on non-retryable URL validation error', async () => {
+  it('startDownload API failure sets error', async () => {
+    mockStart.mockRejectedValueOnce(new Error('Network error'))
+
     const { result } = renderHook(() => useDownload())
-    await act(async () => { await result.current.download('') })
-    expect(mockDownloadVideo).not.toHaveBeenCalled()
-    expect(result.current.retryCount).toBe(0)
+    await act(async () => { await result.current.download('https://youtube.com/watch?v=abc') })
+
+    expect(result.current.error).toContain('Network error')
+    expect(result.current.loading).toBe(false)
   })
 
   // ── Progress ───────────────────────────────────────────────────────────────
 
-  it('reaches progress 100 on successful download', async () => {
-    mockDownloadVideo.mockResolvedValueOnce({ data: makeBlob(), headers: {} } as any)
+  it('progress updates correctly from SSE events', async () => {
+    mockStart.mockResolvedValueOnce({ job_id: 'job-1' })
+    mockFile.mockResolvedValueOnce({ data: makeBlob(), headers: {} } as any)
+
     const { result } = renderHook(() => useDownload())
-    await act(async () => {
-      await result.current.download('https://www.instagram.com/reel/abc')
-    })
+    let p!: Promise<void>
+    act(() => { p = result.current.download('https://youtube.com/watch?v=abc') })
+    await flushMicrotasks()
+
+    act(() => { lastES!.emit({ type: 'progress', percent: 33 }) })
+    expect(result.current.progress).toBe(33)
+
+    act(() => { lastES!.emit({ type: 'progress', percent: 66 }) })
+    expect(result.current.progress).toBe(66)
+
+    act(() => { lastES!.emit({ type: 'done', filename: 'v.mp4' }) })
+    await act(async () => { await p })
     expect(result.current.progress).toBe(100)
   })
 })

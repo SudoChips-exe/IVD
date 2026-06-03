@@ -158,6 +158,56 @@
 .platform-badge.youtube   { background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.16); color: #f87171; }
 .platform-badge.twitter   { background: var(--purple-muted); border: 1px solid rgba(139, 92, 246, 0.18); color: var(--purple); }
 .platform-badge.facebook  { background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.16); color: #60a5fa; }
+/* ══ QUALITY SELECTOR ══ */
+.quality-selector {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.quality-label {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.quality-options {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.quality-btn {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--t), color var(--t), background var(--t);
+}
+
+.quality-btn:hover:not(:disabled) {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.quality-btn.active {
+  background: rgba(7, 217, 236, 0.1);
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.quality-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
 /* ══ DOWNLOAD BUTTON ══ */
 .download-button {
   width: 100%;
@@ -217,6 +267,9 @@
 
 .progress-status { color: var(--text-secondary); }
 .progress-percent { color: var(--cyan); font-weight: 600; font-family: var(--font-display); }
+.progress-meta { display: flex; gap: 0.6rem; align-items: center; }
+.progress-speed { color: var(--cyan); font-weight: 600; font-family: var(--font-display); }
+.progress-eta { color: var(--text-secondary); }
 
 .progress-bar {
   width: 100%;
@@ -291,6 +344,106 @@
 }
 
 .footer-links a:hover { color: var(--text-primary); }
+
+/* ══ CANCEL BUTTON ══ */
+.cancel-btn {
+  width: 100%;
+  padding: 0.5rem;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--t), color var(--t);
+  margin-top: 0.35rem;
+}
+
+.cancel-btn:hover { border-color: #f87171; color: #f87171; }
+
+/* ══ COOKIE UPLOAD ══ */
+.cookie-upload {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.25rem 1.5rem;
+}
+
+.cookie-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.cookie-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.cookie-status {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.cookie-status.active { color: var(--success); }
+
+.cookie-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 1rem;
+}
+
+.cookie-desc code {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.78rem;
+  color: var(--cyan);
+}
+
+.cookie-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+.cookie-btn {
+  padding: 0.4rem 0.9rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color var(--t), color var(--t);
+}
+
+.cookie-btn:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
+.cookie-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cookie-btn.danger:hover { border-color: #f87171; color: #f87171; }
+
+.cookie-msg {
+  margin-top: 0.75rem;
+  font-size: 0.78rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
+.cookie-msg.success {
+  background: rgba(16, 185, 129, 0.07);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  color: var(--success);
+}
+
+.cookie-msg.error {
+  background: rgba(239, 68, 68, 0.07);
+  border: 1px solid rgba(239, 68, 68, 0.18);
+  color: #f87171;
+}
 
 /* ══ RESPONSIVE ══ */
 @media (max-width: 640px) {

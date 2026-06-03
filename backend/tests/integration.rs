@@ -1,6 +1,6 @@
 use actix_web::{test, web, App};
 use serde_json::json;
-use video_downloader::{cache::MetadataCache, config::Config, handlers};
+use video_downloader::{cache::MetadataCache, config::Config, handlers, jobs::JobStore};
 
 fn test_config() -> Config {
     Config {
@@ -29,6 +29,7 @@ macro_rules! app {
             App::new()
                 .app_data(web::Data::new(test_config()))
                 .app_data(web::Data::new(MetadataCache::new(900)))
+                .app_data(web::Data::new(JobStore::new()))
                 .configure(handlers::configure_routes),
         )
         .await
@@ -55,7 +56,7 @@ async fn health_body_has_status_and_service_fields() {
     assert!(body["timestamp"].is_string());
 }
 
-// ── Download — validation errors (no external calls) ─────────────────────────
+// ── Download — validation errors (synchronous, no external calls) ─────────────
 
 #[actix_web::test]
 async fn download_empty_url_returns_400() {
@@ -91,15 +92,17 @@ async fn download_no_protocol_returns_400() {
 }
 
 #[actix_web::test]
-async fn download_unsupported_url_returns_error() {
+async fn download_valid_url_returns_job_id() {
+    // Valid URLs start a background job immediately and return 200 + job_id.
+    // Errors (unsupported site, auth) come later via SSE.
     let app = app!();
     let req = test::TestRequest::post()
         .uri("/api/download")
         .set_json(json!({ "url": "https://example.com/video/123" }))
         .to_request();
-    let resp = test::call_service(&app, req).await;
-    // yt-dlp rejects unsupported sites — expect any non-200 error
-    assert_ne!(resp.status(), 200);
+    let body: serde_json::Value = test::call_and_read_body_json(&app, req).await;
+    assert!(body.get("job_id").is_some(), "expected job_id in response");
+    assert!(body["job_id"].is_string());
 }
 
 #[actix_web::test]
@@ -112,6 +115,50 @@ async fn download_error_body_contains_error_and_message_fields() {
     let body: serde_json::Value = test::call_and_read_body_json(&app, req).await;
     assert!(body.get("error").is_some(), "missing 'error' field");
     assert!(body.get("message").is_some(), "missing 'message' field");
+}
+
+// ── Progress / File endpoints ─────────────────────────────────────────────────
+
+#[actix_web::test]
+async fn progress_unknown_job_returns_404() {
+    let app = app!();
+    let req = test::TestRequest::get()
+        .uri("/api/progress/nonexistent-job-id")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 404);
+}
+
+#[actix_web::test]
+async fn file_unknown_job_returns_404() {
+    let app = app!();
+    let req = test::TestRequest::get()
+        .uri("/api/file/nonexistent-job-id")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 404);
+}
+
+// ── Cookies ───────────────────────────────────────────────────────────────────
+
+#[actix_web::test]
+async fn cookies_status_returns_json() {
+    let app = app!();
+    let req = test::TestRequest::get().uri("/api/cookies/status").to_request();
+    let body: serde_json::Value = test::call_and_read_body_json(&app, req).await;
+    assert!(body.get("active").is_some());
+}
+
+#[actix_web::test]
+async fn cookies_upload_empty_body_returns_400() {
+    let app = app!();
+    let req = test::TestRequest::post()
+        .uri("/api/cookies")
+        .insert_header(("content-type", "text/plain"))
+        .set_payload("")
+        .to_request();
+    let resp = test::call_service(&app, req).await;
+    assert_eq!(resp.status(), 400);
 }
 
 // ── Routing ───────────────────────────────────────────────────────────────────

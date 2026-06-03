@@ -222,6 +222,11 @@ body {
   line-height: 1.65;
 }
 
+/* ── Settings section ── */
+.settings-section {
+  margin-bottom: 4rem;
+}
+
 /* ── Success ── */
 .success-message {
   display: flex;

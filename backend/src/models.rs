@@ -39,6 +39,7 @@ impl Platform {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DownloadRequest {
     pub url: String,
+    pub quality: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

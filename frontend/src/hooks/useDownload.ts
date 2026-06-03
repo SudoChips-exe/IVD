@@ -1,71 +1,121 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { api } from '../services/api'
 
 interface DownloadState {
   loading: boolean
   progress: number
+  speed: string | null
+  eta: string | null
+  status: string | null
   error: string | null
   success: boolean
-  retryCount: number
 }
-
-const MAX_RETRIES = 3
-const RETRY_DELAY = 1000 // 1 second
 
 export const useDownload = () => {
   const [state, setState] = useState<DownloadState>({
     loading: false,
     progress: 0,
+    speed: null,
+    eta: null,
+    status: null,
     error: null,
     success: false,
-    retryCount: 0,
   })
 
-  const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+  const esRef = useRef<EventSource | null>(null)
+  const jobIdRef = useRef<string | null>(null)
 
-  const download = useCallback(async (url: string, retryAttempt = 0): Promise<void> => {
-    // Skip validation if retrying
-    if (retryAttempt === 0) {
-      setState({
-        loading: true,
-        progress: 0,
-        error: null,
-        success: false,
-        retryCount: 0,
-      })
+  const cancel = useCallback(async () => {
+    esRef.current?.close()
+    esRef.current = null
+
+    if (jobIdRef.current) {
+      api.cancelDownload(jobIdRef.current).catch(() => {})
+      jobIdRef.current = null
     }
 
+    setState({ loading: false, progress: 0, speed: null, eta: null, status: null, error: null, success: false })
+  }, [])
+
+  const download = useCallback(async (url: string, quality?: string): Promise<void> => {
+    if (!url.trim()) {
+      setState(prev => ({ ...prev, error: 'Please enter a valid URL' }))
+      return
+    }
+
+    setState({ loading: true, progress: 0, speed: null, eta: null, status: 'Starting...', error: null, success: false })
+
     try {
-      // Validate URL only on first attempt
-      if (!url.trim()) {
-        throw new Error('Please enter a valid URL')
-      }
+      const { job_id } = await api.startDownload(url.trim(), quality)
+      jobIdRef.current = job_id
 
-      // Start download with progress indication
-      setState(prev => ({ ...prev, progress: 25 }))
-      
-      const response = await api.downloadVideo(url.trim())
-      
-      setState(prev => ({ ...prev, progress: 75 }))
+      await new Promise<void>((resolve, reject) => {
+        const es = new EventSource(api.getProgressUrl(job_id))
+        esRef.current = es
 
-      // Extract filename from response headers
+        es.onmessage = (e) => {
+          try {
+            const event = JSON.parse(e.data)
+
+            switch (event.type) {
+              case 'progress':
+                setState(prev => ({
+                  ...prev,
+                  progress: Math.round(event.percent),
+                  speed: event.speed ?? null,
+                  eta: event.eta ?? null,
+                  status: null,
+                }))
+                break
+              case 'authenticating':
+                setState(prev => ({ ...prev, progress: 0, status: `Authenticating with ${event.method}...` }))
+                break
+              case 'merging':
+                setState(prev => ({ ...prev, progress: 95, status: 'Merging video and audio...' }))
+                break
+              case 'done':
+                es.close()
+                esRef.current = null
+                resolve()
+                break
+              case 'cancelled':
+                es.close()
+                esRef.current = null
+                resolve()
+                return
+              case 'error':
+                es.close()
+                esRef.current = null
+                reject(new Error(event.message))
+                break
+            }
+          } catch {
+            // ignore parse errors
+          }
+        }
+
+        es.onerror = () => {
+          es.close()
+          esRef.current = null
+          reject(new Error('Connection lost. Please try again.'))
+        }
+      })
+
+      // If cancelled during the SSE phase, state was already reset by cancel()
+      if (!jobIdRef.current) return
+
+      setState(prev => ({ ...prev, progress: 98, status: 'Fetching file...' }))
+      const response = await api.downloadFile(job_id)
+
       const contentDisposition = response.headers['content-disposition']
       let filename = 'downloaded_video.mp4'
-      
       if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="(.+?)"/)
-        if (filenameMatch) {
-          filename = filenameMatch[1]
-        }
+        const match = contentDisposition.match(/filename="(.+?)"/)
+        if (match) filename = match[1]
       }
 
-      // Create blob and trigger download
-      const blob = await response.data as Blob
-      
-      // Validate blob
-      if (!blob || blob.size === 0) {
-        throw new Error('Downloaded file is empty')
-      }
+      const blob = response.data as Blob
+      if (!blob || blob.size === 0) throw new Error('Downloaded file is empty')
 
       const downloadUrl = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -76,50 +126,25 @@ export const useDownload = () => {
       document.body.removeChild(link)
       window.URL.revokeObjectURL(downloadUrl)
 
-      setState(prev => ({
-        ...prev,
-        progress: 100,
-        success: true,
-        loading: false,
-      }))
-      
-      // Clear success message after 5 seconds
+      jobIdRef.current = null
+      setState({ loading: false, progress: 100, speed: null, eta: null, status: null, error: null, success: true })
       setTimeout(() => setState(prev => ({ ...prev, success: false })), 5000)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Download failed. Please try again.'
-      console.error('Download error:', err)
-
-      // Determine if error is retryable
-      const isRetryable = !errorMessage.includes('Invalid URL') && 
-                         !errorMessage.includes('Please enter a valid URL') &&
-                         retryAttempt < MAX_RETRIES
-
-      if (isRetryable) {
-        setState(prev => ({ 
-          ...prev, 
-          error: `${errorMessage} (Retrying... Attempt ${retryAttempt + 1}/${MAX_RETRIES})`,
-          retryCount: retryAttempt + 1,
-        }))
-        
-        await sleep(RETRY_DELAY * (retryAttempt + 1)) // Exponential backoff
-        await download(url, retryAttempt + 1)
-      } else {
-        setState(prev => ({
-          ...prev,
-          error: errorMessage,
-          loading: false,
-          retryCount: retryAttempt,
-        }))
-      }
+      const message = err instanceof Error ? err.message : 'Download failed. Please try again.'
+      jobIdRef.current = null
+      setState(prev => ({ ...prev, loading: false, error: message, status: null }))
     }
   }, [])
 
-  return { 
-    download, 
-    loading: state.loading, 
-    progress: state.progress, 
-    error: state.error, 
+  return {
+    download,
+    cancel,
+    loading: state.loading,
+    progress: state.progress,
+    speed: state.speed,
+    eta: state.eta,
+    status: state.status,
+    error: state.error,
     success: state.success,
-    retryCount: state.retryCount,
   }
 }
