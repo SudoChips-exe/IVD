@@ -1,5 +1,10 @@
 FROM rust:1.82-slim AS backend-builder
 
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 # Cache deps — build dummy binary first so layer is reused when only src changes
