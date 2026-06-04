@@ -1,28 +1,51 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import './App.css'
 import Header from './components/Header'
 import URLInput from './components/URLInput'
 import QualitySelector, { Quality } from './components/QualitySelector'
 import DownloadButton from './components/DownloadButton'
-import ProgressBar from './components/ProgressBar'
-import ErrorMessage from './components/ErrorMessage'
 import Footer from './components/Footer'
 import CookieUpload from './components/CookieUpload'
-import { CheckCircleIcon, PlatformsIcon, AudioIcon, FastIcon, MobileIcon } from './components/Icons'
-import { useDownload } from './hooks/useDownload'
+import VideoPreview from './components/VideoPreview'
+import DownloadQueueItem from './components/DownloadQueueItem'
+import { PlatformsIcon, AudioIcon, FastIcon, MobileIcon } from './components/Icons'
+import { useDownloadQueue } from './hooks/useDownloadQueue'
+import { useVideoInfo } from './hooks/useVideoInfo'
 import { useScrollSpy } from './hooks/useScrollSpy'
+import { getHistory, clearHistory } from './utils/history'
+import { HistoryEntry } from './types'
 
 function App() {
   useScrollSpy()
   const [url, setUrl] = useState('')
   const [quality, setQuality] = useState<Quality>('best')
-  const { download, cancel, loading, progress, speed, eta, status, error, success } = useDownload()
+  const [audioOnly, setAudioOnly] = useState(false)
+  const [history, setHistory] = useState<HistoryEntry[]>([])
+
+  const { info, loading: infoLoading, error: infoError, clear: clearInfo } = useVideoInfo(url)
+  const { items, addDownload, cancelItem, removeItem } = useDownloadQueue()
+
+  useEffect(() => {
+    setHistory(getHistory())
+  }, [])
+
+  // Refresh history when a download completes
+  useEffect(() => {
+    if (items.some(i => i.state === 'done')) {
+      setHistory(getHistory())
+    }
+  }, [items])
 
   const handleDownload = async () => {
-    if (url.trim()) {
-      await download(url, quality === 'best' ? undefined : quality)
-    }
+    const trimmed = url.trim()
+    if (!trimmed) return
+    clearInfo()
+    setUrl('')
+    addDownload(trimmed, quality, audioOnly, info ?? undefined)
   }
+
+  const activeItems = items.filter(i => i.state === 'downloading')
+  const completedItems = items.filter(i => i.state !== 'downloading')
 
   return (
     <div className="app-container">
@@ -39,40 +62,100 @@ function App() {
             value={url}
             onChange={setUrl}
             onSubmit={handleDownload}
-            disabled={loading}
+            disabled={false}
           />
 
-          <QualitySelector value={quality} onChange={setQuality} disabled={loading} />
+          <VideoPreview info={info} loading={infoLoading} error={infoError} />
+
+          <QualitySelector
+            value={quality}
+            onChange={setQuality}
+            audioOnly={audioOnly}
+            onAudioOnlyChange={setAudioOnly}
+          />
 
           <DownloadButton
             onClick={handleDownload}
-            disabled={loading || !url.trim()}
-            loading={loading}
+            disabled={!url.trim()}
+            loading={false}
           />
-
-          {loading && (
-            <>
-              <ProgressBar
-                progress={progress}
-                status={status}
-                speed={speed}
-                eta={eta}
-              />
-              <button className="cancel-btn" onClick={cancel}>
-                Cancel
-              </button>
-            </>
-          )}
-
-          {error && <ErrorMessage message={error} />}
-
-          {success && (
-            <div className="success-message">
-              <CheckCircleIcon size={16} />
-              <span>Video downloaded successfully.</span>
-            </div>
-          )}
         </div>
+
+        {activeItems.length > 0 && (
+          <>
+            <div className="section-label">Downloading</div>
+            <div className="queue-section">
+              {activeItems.map(item => (
+                <DownloadQueueItem
+                  key={item.id}
+                  item={item}
+                  onCancel={() => cancelItem(item.id)}
+                  onRemove={() => removeItem(item.id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {completedItems.length > 0 && (
+          <>
+            <div className="section-label">Completed</div>
+            <div className="queue-section">
+              {completedItems.map(item => (
+                <DownloadQueueItem
+                  key={item.id}
+                  item={item}
+                  onCancel={() => cancelItem(item.id)}
+                  onRemove={() => removeItem(item.id)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {history.length > 0 && (
+          <>
+            <div className="section-label section-label--history" id="history">
+              History
+              <button
+                className="clear-history-btn"
+                type="button"
+                onClick={() => { clearHistory(); setHistory([]) }}
+              >
+                Clear all
+              </button>
+            </div>
+            <div className="history-section">
+              {history.slice(0, 20).map(entry => (
+                <div key={entry.id} className="history-item">
+                  {entry.thumbnail && (
+                    <img
+                      className="history-thumb"
+                      src={entry.thumbnail}
+                      alt=""
+                      loading="lazy"
+                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
+                    />
+                  )}
+                  <div className="history-info">
+                    <p className="history-title">{entry.title}</p>
+                    <div className="history-meta">
+                      <span className={`platform-badge ${entry.platform.toLowerCase()}`}>
+                        {entry.platform}
+                      </span>
+                      <span className="history-quality">
+                        {entry.audioOnly ? 'MP3' : entry.quality.toUpperCase()}
+                      </span>
+                      <span className="history-date">
+                        {new Date(entry.timestamp).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         <div className="section-label" id="features">Features</div>
         <div className="features-section">
@@ -91,8 +174,8 @@ function App() {
               <AudioIcon size={20} />
             </div>
             <div className="feature-text">
-              <h3>Audio Preserved</h3>
-              <p>Full sound fidelity and audio sync retained for every download.</p>
+              <h3>Audio &amp; Video</h3>
+              <p>Download full video or extract audio as MP3 — your choice, every time.</p>
             </div>
           </div>
 
@@ -111,8 +194,8 @@ function App() {
               <MobileIcon size={20} />
             </div>
             <div className="feature-text">
-              <h3>Mobile Friendly</h3>
-              <p>Fully responsive across Android, iOS, tablet, and desktop.</p>
+              <h3>Queue Multiple Downloads</h3>
+              <p>Start several downloads simultaneously — paste a URL and queue another while the first runs.</p>
             </div>
           </div>
         </div>
@@ -130,7 +213,7 @@ function App() {
             </div>
             <div className="faq-item">
               <h3>What video quality is downloaded?</h3>
-              <p>Choose from Best, 1080p, 720p, 480p, or 360p. "Best" downloads the highest quality available from the source platform.</p>
+              <p>Choose from Best, 1080p, 720p, 480p, or 360p. Select MP3 to extract audio only.</p>
             </div>
             <div className="faq-item">
               <h3>Why do Instagram downloads fail?</h3>

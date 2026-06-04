@@ -23,13 +23,19 @@ pub async fn download_video(
     util::validate_url(&url)?;
 
     let quality = req.quality.clone();
-    log::info!("Download job started: {} (quality: {})", url, quality.as_deref().unwrap_or("best"));
+    let audio_only = req.audio_only.unwrap_or(false);
+    log::info!(
+        "Download job started: {} (quality: {}, audio_only: {})",
+        url,
+        quality.as_deref().unwrap_or("best"),
+        audio_only
+    );
 
     let job_id = Uuid::new_v4().to_string();
     let (tx, result_store, cancelled) = jobs.create(&job_id).await;
 
     tokio::spawn(async move {
-        ytdlp::extract_with_progress(url, quality, tx, result_store, cancelled).await;
+        ytdlp::extract_with_progress(url, quality, audio_only, tx, result_store, cancelled).await;
     });
 
     Ok(HttpResponse::Ok().json(StartResponse { job_id }))

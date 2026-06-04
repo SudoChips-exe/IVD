@@ -40,6 +40,17 @@ impl Platform {
 pub struct DownloadRequest {
     pub url: String,
     pub quality: Option<String>,
+    pub audio_only: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct VideoInfo {
+    pub title: String,
+    pub uploader: String,
+    pub duration_seconds: Option<u64>,
+    pub thumbnail_url: Option<String>,
+    pub filesize_approx: Option<u64>,
+    pub platform: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

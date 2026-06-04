@@ -5,24 +5,142 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::{broadcast, Mutex};
 
+use crate::error::{AppError, AppResult};
 use crate::jobs::{JobEvent, JobResult};
+use crate::models::VideoInfo;
 
 const BROWSERS: &[&str] = &["chrome", "chromium", "firefox", "brave", "edge"];
 const COOKIES_FILE: &str = "~/.config/vidclaw/cookies.txt";
 
+/// Build a minimal Netscape cookies.txt from environment-variable session tokens.
+/// Supports INSTAGRAM_SESSION_ID and FACEBOOK_SESSION_COOKIES (semicolon-separated key=value pairs).
+async fn build_session_cookies(url: &str) -> Option<String> {
+    let is_instagram = url.contains("instagram.com") || url.contains("ig.me");
+    let is_facebook  = url.contains("facebook.com")  || url.contains("fb.watch");
+
+    if !is_instagram && !is_facebook {
+        return None;
+    }
+
+    let mut lines = vec!["# Netscape HTTP Cookie File".to_string()];
+    let mut has_cookies = false;
+
+    if is_instagram {
+        if let Ok(session_id) = std::env::var("INSTAGRAM_SESSION_ID") {
+            if !session_id.is_empty() {
+                lines.push(format!(".instagram.com\tTRUE\t/\tTRUE\t9999999999\tsessionid\t{}", session_id));
+                has_cookies = true;
+            }
+        }
+    }
+
+    if is_facebook {
+        // FACEBOOK_SESSION_COOKIES = semicolon-separated key=value pairs
+        // e.g. "c_user=123;xs=abc;fr=xyz"
+        if let Ok(fb_cookies) = std::env::var("FACEBOOK_SESSION_COOKIES") {
+            for pair in fb_cookies.split(';') {
+                let pair = pair.trim();
+                if let Some((k, v)) = pair.split_once('=') {
+                    lines.push(format!(".facebook.com\tTRUE\t/\tTRUE\t9999999999\t{}\t{}", k.trim(), v.trim()));
+                    has_cookies = true;
+                }
+            }
+        }
+    }
+
+    if !has_cookies {
+        return None;
+    }
+
+    // Write temp cookies file
+    let tmp = format!("/tmp/vidclaw_cookies_{}.txt", uuid::Uuid::new_v4());
+    tokio::fs::write(&tmp, lines.join("\n") + "\n").await.ok()?;
+    Some(tmp)
+}
+
+pub async fn get_info(url: &str) -> AppResult<VideoInfo> {
+    // Try without auth, then session cookies, then cookies file
+    if let Some(info) = try_get_info(url, None).await {
+        return Ok(info);
+    }
+    if let Some(session_file) = build_session_cookies(url).await {
+        let result = try_get_info(url, Some(&session_file)).await;
+        let _ = tokio::fs::remove_file(&session_file).await;
+        if let Some(info) = result { return Ok(info); }
+    }
+    let cookies_path = expand_home(COOKIES_FILE);
+    if tokio::fs::metadata(&cookies_path).await.is_ok() {
+        if let Some(info) = try_get_info(url, Some(&cookies_path)).await {
+            return Ok(info);
+        }
+    }
+    Err(AppError::PlatformError("Could not fetch video info. Check the URL or platform support.".to_string()))
+}
+
+async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
+    let mut args = vec![
+        "--dump-json".to_string(),
+        "--no-playlist".to_string(),
+        "--quiet".to_string(),
+        "--no-warnings".to_string(),
+    ];
+    if let Some(path) = cookies {
+        args.push("--cookies".to_string());
+        args.push(path.to_string());
+    }
+    if let Some(proxy) = get_proxy() {
+        args.push("--proxy".to_string());
+        args.push(proxy);
+    }
+    args.push(url.to_string());
+
+    let output = Command::new(ytdlp_bin())
+        .args(&args)
+        .output()
+        .await
+        .ok()?;
+
+    if !output.status.success() { return None; }
+
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+
+    let thumbnail = json["thumbnail"].as_str()
+        .or_else(|| json["thumbnails"].as_array()?.last()?.get("url")?.as_str())
+        .map(str::to_string);
+
+    Some(VideoInfo {
+        title: json["title"].as_str().unwrap_or("Unknown").to_string(),
+        uploader: json["uploader"].as_str()
+            .or_else(|| json["channel"].as_str())
+            .or_else(|| json["creator"].as_str())
+            .unwrap_or("Unknown")
+            .to_string(),
+        duration_seconds: json["duration"].as_u64(),
+        thumbnail_url: thumbnail,
+        filesize_approx: json["filesize_approx"].as_u64().or_else(|| json["filesize"].as_u64()),
+        platform: json["extractor_key"].as_str().unwrap_or("Unknown").to_string(),
+    })
+}
+
 pub async fn extract_with_progress(
     url: String,
     quality: Option<String>,
+    audio_only: bool,
     tx: broadcast::Sender<JobEvent>,
     result_store: Arc<Mutex<Option<JobResult>>>,
     cancelled: Arc<AtomicBool>,
 ) {
     let id = uuid::Uuid::new_v4().to_string();
-    let tmp_path = format!("/tmp/vidclaw_{}.mp4", id);
-    let format = quality_to_format(quality.as_deref());
+    let ext = if audio_only { "mp3" } else { "mp4" };
+    let tmp_path = format!("/tmp/vidclaw_{}.{}", id, ext);
+    let format = if audio_only {
+        "bestaudio/best".to_string()
+    } else {
+        quality_to_format(quality.as_deref())
+    };
 
     let title = get_title(&url).await;
-    let filename = build_filename(title.as_deref());
+    let filename = build_filename(title.as_deref(), audio_only);
 
     macro_rules! check_cancelled {
         () => {
@@ -35,7 +153,7 @@ pub async fn extract_with_progress(
     }
 
     // Try without cookies (YouTube, TikTok, Twitter)
-    match run_with_progress(&url, &tmp_path, &format, CookieSource::None, &tx, &cancelled).await {
+    match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::None, &tx, &cancelled).await {
         Ok(()) => {
             *result_store.lock().await = Some(JobResult { file_path: tmp_path, filename: filename.clone() });
             let _ = tx.send(JobEvent::Done { filename });
@@ -57,12 +175,35 @@ pub async fn extract_with_progress(
 
     check_cancelled!();
 
+    // Try session cookies from env vars (INSTAGRAM_SESSION_ID / FACEBOOK_SESSION_COOKIES)
+    if let Some(session_file) = build_session_cookies(&url).await {
+        let _ = tx.send(JobEvent::Authenticating { method: "session token".into() });
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+        let result = run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::File(&session_file), &tx, &cancelled).await;
+        let _ = tokio::fs::remove_file(&session_file).await; // always clean up temp cookies
+        match result {
+            Ok(()) => {
+                *result_store.lock().await = Some(JobResult { file_path: tmp_path, filename: filename.clone() });
+                let _ = tx.send(JobEvent::Done { filename });
+                return;
+            }
+            Err(ref e) if e == "Cancelled" => {
+                let _ = tokio::fs::remove_file(&tmp_path).await;
+                let _ = tx.send(JobEvent::Cancelled);
+                return;
+            }
+            Err(_) => {}
+        }
+    }
+
+    check_cancelled!();
+
     // Try cookies file
     let cookies_path = expand_home(COOKIES_FILE);
     if tokio::fs::metadata(&cookies_path).await.is_ok() {
         let _ = tx.send(JobEvent::Authenticating { method: "cookies file".into() });
         let _ = tokio::fs::remove_file(&tmp_path).await;
-        match run_with_progress(&url, &tmp_path, &format, CookieSource::File(&cookies_path), &tx, &cancelled).await {
+        match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::File(&cookies_path), &tx, &cancelled).await {
             Ok(()) => {
                 *result_store.lock().await = Some(JobResult { file_path: tmp_path, filename: filename.clone() });
                 let _ = tx.send(JobEvent::Done { filename });
@@ -83,7 +224,7 @@ pub async fn extract_with_progress(
         check_cancelled!();
         let _ = tx.send(JobEvent::Authenticating { method: browser.to_string() });
         let _ = tokio::fs::remove_file(&tmp_path).await;
-        match run_with_progress(&url, &tmp_path, &format, CookieSource::Browser(browser), &tx, &cancelled).await {
+        match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::Browser(browser), &tx, &cancelled).await {
             Ok(()) => {
                 *result_store.lock().await = Some(JobResult { file_path: tmp_path, filename: filename.clone() });
                 let _ = tx.send(JobEvent::Done { filename });
@@ -116,14 +257,15 @@ async fn run_with_progress(
     url: &str,
     tmp_path: &str,
     format: &str,
+    audio_only: bool,
     cookies: CookieSource<'_>,
     tx: &broadcast::Sender<JobEvent>,
     cancelled: &Arc<AtomicBool>,
 ) -> Result<(), String> {
-    let mut args = build_args(tmp_path, format, &cookies);
+    let mut args = build_args(tmp_path, format, audio_only, &cookies);
     args.push(url.into());
 
-    let mut child = Command::new("yt-dlp")
+    let mut child = Command::new(ytdlp_bin())
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -181,14 +323,23 @@ async fn run_with_progress(
     Err(stderr_out)
 }
 
-fn build_args(tmp_path: &str, format: &str, cookies: &CookieSource<'_>) -> Vec<String> {
+fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSource<'_>) -> Vec<String> {
     let mut args: Vec<String> = vec![
         "-o".into(), tmp_path.into(),
         "-f".into(), format.into(),
-        "--merge-output-format".into(), "mp4".into(),
         "--no-playlist".into(),
         "--newline".into(),
     ];
+    if audio_only {
+        args.push("--extract-audio".into());
+        args.push("--audio-format".into());
+        args.push("mp3".into());
+        args.push("--audio-quality".into());
+        args.push("0".into()); // best quality
+    } else {
+        args.push("--merge-output-format".into());
+        args.push("mp4".into());
+    }
 
     match cookies {
         CookieSource::None => {}
@@ -206,6 +357,26 @@ fn build_args(tmp_path: &str, format: &str, cookies: &CookieSource<'_>) -> Vec<S
 
 fn get_proxy() -> Option<String> {
     std::env::var("YTDLP_PROXY").ok().filter(|s| !s.is_empty())
+}
+
+/// Resolve yt-dlp binary path. Priority:
+/// 1. YTDLP_PATH env var (explicit override)
+/// 2. Venv at YTDLP_VENV or ~/.local/share/vidclaw/venv (has curl-cffi for TikTok)
+/// 3. System yt-dlp
+fn ytdlp_bin() -> String {
+    if let Ok(path) = std::env::var("YTDLP_PATH") {
+        if !path.is_empty() { return path; }
+    }
+
+    let venv_dir = std::env::var("YTDLP_VENV")
+        .unwrap_or_else(|_| expand_home("~/.local/share/vidclaw/venv"));
+    let venv_bin = format!("{}/bin/yt-dlp", venv_dir);
+
+    if std::path::Path::new(&venv_bin).exists() {
+        return venv_bin;
+    }
+
+    "yt-dlp".to_string()
 }
 
 fn parse_progress_line(line: &str) -> Option<(f32, Option<String>, Option<String>)> {
@@ -279,7 +450,8 @@ fn expand_home(path: &str) -> String {
     path.to_string()
 }
 
-fn build_filename(title: Option<&str>) -> String {
+fn build_filename(title: Option<&str>, audio_only: bool) -> String {
+    let ext = if audio_only { "mp3" } else { "mp4" };
     match title {
         Some(t) => {
             let safe: String = t.chars()
@@ -289,14 +461,14 @@ fn build_filename(title: Option<&str>) -> String {
                 })
                 .take(80)
                 .collect();
-            format!("{}.mp4", safe)
+            format!("{}.{}", safe, ext)
         }
-        None => "video.mp4".to_string(),
+        None => format!("video.{}", ext),
     }
 }
 
 async fn get_title(url: &str) -> Option<String> {
-    let output = Command::new("yt-dlp")
+    let output = Command::new(ytdlp_bin())
         .args(["--get-title", "--no-playlist", "--quiet", "--no-warnings", url])
         .output()
         .await

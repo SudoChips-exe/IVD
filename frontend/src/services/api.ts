@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
+import { VideoInfo } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
 
@@ -13,8 +14,17 @@ const blobClient: AxiosInstance = axios.create({
 })
 
 export const api = {
-  async startDownload(url: string, quality?: string): Promise<{ job_id: string }> {
-    const res = await client.post('/api/download', { url, quality: quality ?? null })
+  async getVideoInfo(url: string): Promise<VideoInfo> {
+    const res = await client.post('/api/info', { url })
+    return res.data
+  },
+
+  async startDownload(url: string, quality?: string, audioOnly?: boolean): Promise<{ job_id: string }> {
+    const res = await client.post('/api/download', {
+      url,
+      quality: quality ?? null,
+      audio_only: audioOnly ?? false,
+    })
     return res.data
   },
 

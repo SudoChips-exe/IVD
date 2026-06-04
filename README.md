@@ -1,212 +1,132 @@
-# Universal Social Media Video Downloader
+# VIDCLAW
 
-> Download videos from Instagram, TikTok, YouTube, Twitter/X, Facebook, and Snapchat instantly with a single click. No ads, no tracking, preserves audio and quality.
+Download videos from Instagram, TikTok, YouTube, Twitter/X, and Facebook. No account required, no ads.
 
-## ✨ Features
+## Features
 
-- **One-Click Downloads** — Paste a video link, press download
-- **Audio Preservation** — Never strips audio or quality
-- **Multi-Platform Support** — Works with 6 major social platforms:
-  - 📸 Instagram (Reels, Stories, Posts)
-  - 🎵 TikTok (Videos, Sounds)
-  - ▶️ YouTube (Videos, Shorts)
-  - 𝕏 Twitter/X (Videos, GIFs)
-  - 📘 Facebook (Videos, Stories)
-  - 👻 Snapchat (Stories, Memories)
-- **Direct Streaming** — No intermediate storage; downloads stream directly to your device
-- **Mobile Friendly** — Use from any device with a browser
-- **Free & Open Source** — No paid tiers or limitations
+- **Video preview** — thumbnail, title, uploader, duration, and file size shown before you download
+- **Multi-platform** — Instagram, TikTok, YouTube, Twitter/X, Facebook
+- **Quality selector** — Best / 1080p / 720p / 480p / 360p
+- **Audio-only (MP3)** — extract audio from any video
+- **Simultaneous downloads** — queue multiple URLs; each runs in parallel
+- **Real-time progress** — live speed, ETA, and % via SSE
+- **Download history** — persisted in localStorage across sessions
+- **Cancel at any time** — kills the yt-dlp process and cleans up
+- **PWA** — installable on Android, iOS, and desktop
+- **Cookie support** — upload cookies.txt for private/authenticated content
 
-## 🚀 Quick Start
+## Stack
 
+| Layer | Tech |
+|---|---|
+| Backend | Rust + Actix-web |
+| Frontend | React + TypeScript + Vite |
+| Video engine | yt-dlp (+ ffmpeg for muxing) |
+| Deployment | Docker + Render |
 
-# 🚀 Quick Start
+## Local Development
 
-### For Users
-1. Visit **[video-downloader.app](https://video-downloader.app)** (when deployed)
-2. Paste any social media video URL into the input field
-3. Click **Download**
-4. Video saves to your device with audio included
+### Prerequisites
 
-### For Developers
-
-#### Prerequisites
 - Rust 1.70+
-- Bun (recommended) or Node.js 18+
-- Docker (optional, for containerization)
+- Bun
+- yt-dlp in PATH (or see venv setup below)
+- ffmpeg in PATH
 
-#### Setup & Run Locally
+### Run
 
 ```bash
-# Clone the repository
-
-cd video-downloader
-
-# Start the Rust backend
-cd backend
-cargo build --release
-cargo run
-
-# In another terminal, start the React frontend using Bun
-cd frontend
+# From repo root — starts backend (port 8080) + frontend (port 5173)
 bun install
 bun run dev
 ```
 
-Backend runs on `http://localhost:8080`  
-Frontend runs on `http://localhost:5173`
- 
-Or, start both backend and frontend with a single command from the project root:
+Stop with Ctrl+C.
+
+### yt-dlp venv (recommended for TikTok)
+
+TikTok requires `curl-cffi` for JS challenge impersonation. The setup script creates an isolated venv so you don't need `sudo pip`:
 
 ```bash
-# From repository root
-bun install    # (only needed first time to ensure bun can run dev.ts)
-bun run dev
+bash scripts/setup_venv.sh
 ```
 
-Use Ctrl+C to stop both services.
-**Tech Stack:**
-- **Backend**: Rust + Actix-web (high-performance HTTP server)
-- **Frontend**: React + TypeScript + Vite (fast, responsive UI)
-- **Deployment**: Cloud-hosted (AWS/Vercel)
-- **Video Processing**: FFmpeg-compatible libraries
+The backend auto-detects the venv at `~/.local/share/vidclaw/venv`.
 
-**How It Works:**
-1. User enters a video URL in the web interface
-2. Frontend sends URL to Rust backend via HTTP
-3. Backend identifies the platform and fetches video metadata from official APIs
-4. Backend retrieves the direct video URL (with audio stream)
-5. Video streams directly to the user's browser (no server storage)
-6. Browser downloads the file automatically
+## Environment Variables
 
-**Key Design Decision**: We use a **streaming approach** to avoid storing videos on the server. This keeps the application scalable and reduces infrastructure costs.
+Copy `backend/.env.example` to `backend/.env` and fill in as needed.
 
-For detailed architecture, see [ARCHITECTURE.md](./ARCHITECTURE.md).
+| Variable | Default | Description |
+|---|---|---|
+| `SERVER_HOST` | `0.0.0.0` | Bind address |
+| `SERVER_PORT` | `8080` | Bind port |
+| `FRONTEND_URL` | `http://localhost:5173` | Used in CORS |
+| `RUST_LOG` | `info` | Log level |
+| `YTDLP_PATH` | *(auto)* | Override yt-dlp binary path |
+| `YTDLP_VENV` | `~/.local/share/vidclaw/venv` | Override venv path |
+| `YTDLP_PROXY` | *(none)* | Residential proxy for Instagram/Facebook on VPS |
+| `INSTAGRAM_SESSION_ID` | *(none)* | Instagram sessionid cookie value |
+| `FACEBOOK_SESSION_COOKIES` | *(none)* | Facebook cookies as `key=value;key=value` |
+| `COOKIES_B64` | *(none)* | Base64-encoded cookies.txt (Render/Docker) |
+| `MAX_REQUESTS_PER_MINUTE` | `60` | Global rate limit |
+| `MAX_REQUESTS_PER_IP_PER_MINUTE` | `30` | Per-IP rate limit |
 
-## 📋 Supported Platforms & Limitations
+## Instagram & Facebook
 
-| Platform | Support | Notes |
-|----------|---------|-------|
-| **Instagram** | ✅ Full | Reels, carousel videos, stories (public only) |
-| **TikTok** | ✅ Full | Videos with sound, watermark preserved |
-| **YouTube** | ✅ Full | Videos, Shorts (respects upload restrictions) |
-| **Twitter/X** | ✅ Full | Video tweets, GIFs |
-| **Facebook** | ✅ Full | Public videos only |
-| **Snapchat** | ⚠️ Limited | Stories/memories (requires user credentials) |
+These platforms block datacenter IPs. Two things required:
 
-### Rate Limits
-- **Instagram**: 100 videos/hour per IP
-- **TikTok**: 50 videos/hour per IP
-- **YouTube**: 10,000 quota units/day (shared across all users)
-- **Twitter/X**: 450 requests/15 minutes per API key
-- **Facebook**: 200 requests/hour
-- **Snapchat**: 50 requests/hour
+1. **Cookies** — log into a throwaway account in Chromium/Brave, export via "Get cookies.txt LOCALLY" extension, upload in app Settings or set `COOKIES_B64` env var
+2. **Residential proxy** — set `YTDLP_PROXY=http://user:pass@proxy.webshare.io:80` ([Webshare](https://webshare.io) ~$3/mo)
 
-## ⚠️ Legal & Ethical Considerations
+## Deployment (Render)
 
-This tool downloads videos as they are publicly shared. **You are responsible for respecting copyright and platform terms of service:**
-
-- ✅ **Allowed**: Downloading your own content or content with owner permission
-- ❌ **Not Allowed**: Circumventing DRM protections, downloading copyrighted content without permission, or violating platform ToS
-- ⚖️ **Use at your own risk** — We cannot be held liable for misuse
-
-By using this tool, you agree that you have the legal right to download the content.
-
-## 🔧 Configuration
-
-### Environment Variables
-
-Create a `.env` file in the `backend/` directory:
-
-```env
-# Server configuration
-SERVER_HOST=0.0.0.0
-SERVER_PORT=8080
-RUST_LOG=info
-
-# API Keys (optional for public content, required for authenticated downloads)
-INSTAGRAM_API_KEY=your_key_here
-TIKTOK_API_KEY=your_key_here
-YOUTUBE_API_KEY=your_key_here
-TWITTER_API_KEY=your_key_here
-FACEBOOK_API_KEY=your_key_here
-SNAPCHAT_API_KEY=your_key_here
-
-# Rate limiting
-MAX_REQUESTS_PER_MINUTE=60
-```
-
-See `.env.example` for a template.
-
-## 🐛 Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| "Private video" error | Ensure the video is public or you have access permissions |
-| "Link not recognized" | Verify the link is a direct video URL (not a profile/channel) |
-| "Download fails silently" | Check your internet connection; backend may be rate-limited |
-| "No audio in video" | Report as a bug; our extraction should preserve audio |
-
-## 📦 Deployment
-
-### Docker
 ```bash
-# Build and run with Docker
-docker-compose up --build
+# 1. Push to GitHub
+git push origin main
+
+# 2. render.com → New Web Service → Connect repo
+# Render auto-detects render.yaml
+
+# 3. Set in Render dashboard → Environment:
+#    COOKIES_B64=<base64 -w0 cookies.txt>
+#    YTDLP_PROXY=http://user:pass@proxy.webshare.io:80
+#    RUST_LOG=info
 ```
 
-### Cloud Deployment (AWS Example)
-```bash
-# Build Rust backend
-cargo build --release
+First deploy takes ~8 min (Rust compile). Subsequent deploys are faster due to Docker layer caching.
 
-# Deploy to AWS Lambda or EC2
-# See deployment/ directory for scripts
+### Render Free Tier Notes
+
+- Spins down after 15 min idle → ~30s cold start
+- 512 MB RAM — sufficient for most videos
+- Ephemeral disk — `/tmp` cleared on restart (fine, temp files deleted after serving)
+
+## API
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/info` | Fetch video metadata (title, thumbnail, duration, etc.) |
+| `POST` | `/api/download` | Start download job → returns `{ job_id }` |
+| `GET` | `/api/progress/:job_id` | SSE stream of progress events |
+| `GET` | `/api/file/:job_id` | Download the completed file |
+| `POST` | `/api/cancel/:job_id` | Cancel in-progress download |
+| `POST` | `/api/cookies` | Upload cookies.txt content |
+| `DELETE` | `/api/cookies` | Remove uploaded cookies |
+| `GET` | `/api/cookies/status` | Check if cookies are active |
+| `GET` | `/api/health` | Health check |
+
+### SSE Event Types
+
+```json
+{ "type": "progress", "percent": 42.0, "speed": "3.2MB/s", "eta": "0:12" }
+{ "type": "authenticating", "method": "cookies file" }
+{ "type": "merging" }
+{ "type": "done", "filename": "video.mp4" }
+{ "type": "cancelled" }
+{ "type": "error", "message": "This video is private." }
 ```
 
-## 🤝 Contributing
+## Legal
 
-We welcome contributions! To contribute:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Commit your changes: `git commit -m "Add your feature"`
-4. Push to the branch: `git push origin feature/your-feature`
-5. Open a Pull Request
-
-### Development Guidelines
-- Write tests for new platform adapters
-- Ensure audio is preserved in all downloads
-- Add rate-limit handling for new platforms
-- Document API authentication requirements
-
-## 🗺️ Roadmap
-
-- [ ] **v1.0** — Core functionality for 6 platforms (current)
-- [ ] **v1.1** — Batch downloads (multiple URLs at once)
-- [ ] **v1.2** — Playlist support (download entire TikTok/YouTube playlists)
-- [ ] **v1.3** — Audio-only extraction (MP3 downloads)
-- [ ] **v1.4** — Custom quality/format selection
-- [ ] **v2.0** — Desktop app (Electron wrapper)
-- [ ] **v2.1** — Browser extension for one-click downloads
-
-## 📄 License
-
-This project is licensed under the **MIT License** — see [LICENSE](./LICENSE) file for details.
-
-## ⚡ Performance Stats
-
-- **Average download time**: 5-15 seconds (depends on video length & quality)
-- **No server storage**: Videos stream directly (0 disk footprint per download)
-- **Memory efficient**: Rust backend uses <50MB per concurrent download
-- **Concurrent downloads**: Supports 1000+ simultaneous streams
-
-## 💬 Support & Feedback
-
-- **Report a bug**: [GitHub Issues](https://github.com/yourusername/video-downloader/issues)
-- **Feature request**: [GitHub Discussions](https://github.com/yourusername/video-downloader/discussions)
-- **Email**: support@video-downloader.app
-
----
-
-**Made with ❤️ for video enthusiasts everywhere.**
+Only download content you own or have explicit permission to use. Respect platform terms of service and copyright law.

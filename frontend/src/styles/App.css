@@ -227,6 +227,9 @@ body {
   margin-bottom: 4rem;
 }
 
+/* ── History nav link ── */
+.nav-menu a[href="#history"] { display: none; }
+
 /* ── Success ── */
 .success-message {
   display: flex;

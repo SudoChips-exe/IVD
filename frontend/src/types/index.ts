@@ -1,24 +1,29 @@
-export type Platform = 
-  | 'Instagram' 
-  | 'TikTok' 
-  | 'YouTube' 
-  | 'Twitter' 
-  | 'Facebook' 
+export type Platform =
+  | 'Instagram'
+  | 'TikTok'
+  | 'YouTube'
+  | 'Twitter'
+  | 'Facebook'
   | 'Unknown'
 
-export interface DownloadRequest {
-  url: string
+export interface VideoInfo {
+  title: string
+  uploader: string
+  duration_seconds?: number
+  thumbnail_url?: string
+  filesize_approx?: number
+  platform: string
 }
 
-export interface VideoMetadata {
+export interface HistoryEntry {
+  id: string
+  url: string
   title: string
-  duration_seconds: number
-  author: string
-  video_url: string
-  audio_url?: string
-  thumbnail_url: string
-  original_platform: string
-  file_size_bytes?: number
+  thumbnail?: string
+  platform: string
+  quality: string
+  audioOnly: boolean
+  timestamp: number
 }
 
 export interface ErrorResponse {
