@@ -1,4 +1,4 @@
-FROM rust:latest AS backend-builder
+FROM rust:bookworm AS backend-builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
