@@ -13,7 +13,7 @@
 
 # Backend (Rust)
 /backend/target/
-/backend/Cargo.lock
+# Cargo.lock intentionally tracked for reproducible Docker builds
 **/*.rs.bk
 
 # Frontend (Node)
