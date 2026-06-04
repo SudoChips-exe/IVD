@@ -83,6 +83,8 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         "--no-playlist".to_string(),
         "--quiet".to_string(),
         "--no-warnings".to_string(),
+        "--extractor-args".to_string(),
+        "youtube:player_client=ios,web".to_string(),
     ];
     if let Some(path) = cookies {
         args.push("--cookies".to_string());
@@ -329,6 +331,8 @@ fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSo
         "-f".into(), format.into(),
         "--no-playlist".into(),
         "--newline".into(),
+        "--extractor-args".into(),
+        "youtube:player_client=ios,web".into(),
     ];
     if audio_only {
         args.push("--extract-audio".into());
