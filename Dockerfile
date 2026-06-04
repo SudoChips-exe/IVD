@@ -1,9 +1,10 @@
-FROM rust:1.87 AS backend-builder
+FROM rust:latest AS backend-builder
 
 WORKDIR /app
 
 COPY backend/ .
-RUN cargo build --release
+RUN cargo --version && rustc --version
+RUN cargo build --release --locked 2>&1
 
 
 FROM oven/bun:latest AS frontend-builder
