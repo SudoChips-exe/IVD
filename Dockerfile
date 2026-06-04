@@ -1,10 +1,16 @@
 FROM rust:latest AS backend-builder
 
+RUN apt-get update && apt-get install -y \
+    pkg-config \
+    libssl-dev \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY backend/ .
-RUN cargo --version && rustc --version
-RUN cargo build --release --locked 2>&1
+ENV CARGO_BUILD_JOBS=1
+RUN cargo build --release --locked
 
 
 FROM oven/bun:latest AS frontend-builder
