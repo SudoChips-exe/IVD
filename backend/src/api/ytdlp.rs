@@ -73,6 +73,15 @@ pub async fn get_info(url: &str) -> AppResult<VideoInfo> {
         if let Some(info) = try_get_info(url, Some(&cookies_path)).await {
             return Ok(info);
         }
+        // Fallback: --print skips format selection entirely (succeeds even when YouTube
+        // restricts format URLs to datacenter IPs due to po_token requirements)
+        if let Some(info) = try_get_info_nofmt(url, Some(&cookies_path)).await {
+            return Ok(info);
+        }
+    }
+    // Last resort: --print without cookies (gets metadata if video is public)
+    if let Some(info) = try_get_info_nofmt(url, None).await {
+        return Ok(info);
     }
     Err(AppError::PlatformError("Could not fetch video info. Check the URL or platform support.".to_string()))
 }
@@ -84,11 +93,10 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         "--quiet".to_string(),
         "--no-warnings".to_string(),
     ];
-    // tv_embedded bypasses po_token requirement on datacenter IPs and works with cookies.
-    // ios client avoids bot detection without cookies; web is last-resort fallback.
+    // web client uses auth cookies correctly; ios/mweb avoid bot detection without cookies.
     if cookies.is_some() {
         args.push("--extractor-args".to_string());
-        args.push("youtube:player_client=tv_embedded,web".to_string());
+        args.push("youtube:player_client=web".to_string());
     } else {
         args.push("--extractor-args".to_string());
         args.push("youtube:player_client=ios,mweb,web".to_string());
@@ -134,6 +142,68 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         thumbnail_url: thumbnail,
         filesize_approx: json["filesize_approx"].as_u64().or_else(|| json["filesize"].as_u64()),
         platform: json["extractor_key"].as_str().unwrap_or("Unknown").to_string(),
+    })
+}
+
+/// Extracts basic video info using --print, which does NOT trigger format selection.
+/// Works even when YouTube restricts downloadable formats (e.g. po_token required on datacenter IPs).
+async fn try_get_info_nofmt(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
+    let mut args = vec![
+        "--no-playlist".to_string(),
+        "--quiet".to_string(),
+        "--no-warnings".to_string(),
+    ];
+    if cookies.is_some() {
+        args.push("--extractor-args".to_string());
+        args.push("youtube:player_client=web".to_string());
+    } else {
+        args.push("--extractor-args".to_string());
+        args.push("youtube:player_client=ios,mweb,web".to_string());
+    }
+    if let Some(path) = cookies {
+        args.push("--cookies".to_string());
+        args.push(path.to_string());
+    }
+    if let Some(proxy) = get_proxy() {
+        args.push("--proxy".to_string());
+        args.push(proxy);
+    }
+    // Each --print arg outputs one line; order: title, uploader, duration, thumbnail, extractor
+    for field in &["%(title)s", "%(uploader)s", "%(duration)s", "%(thumbnail)s", "%(extractor_key)s"] {
+        args.push("--print".to_string());
+        args.push(field.to_string());
+    }
+    args.push(url.to_string());
+
+    let output = Command::new(ytdlp_bin())
+        .args(&args)
+        .output()
+        .await
+        .ok()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+            log::warn!("yt-dlp nofmt info failed for {}: {}", url, stderr.trim());
+        }
+        return None;
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines = stdout.lines();
+    let title = lines.next().filter(|s| !s.is_empty() && *s != "NA")?;
+    let uploader = lines.next().unwrap_or("Unknown");
+    let duration_str = lines.next().unwrap_or("NA");
+    let thumbnail = lines.next().unwrap_or("NA");
+    let extractor = lines.next().unwrap_or("Unknown");
+
+    Some(VideoInfo {
+        title: title.to_string(),
+        uploader: if uploader == "NA" || uploader.is_empty() { "Unknown".to_string() } else { uploader.to_string() },
+        duration_seconds: duration_str.parse().ok(),
+        thumbnail_url: if thumbnail == "NA" || thumbnail.is_empty() { None } else { Some(thumbnail.to_string()) },
+        platform: if extractor == "NA" || extractor.is_empty() { "Unknown".to_string() } else { extractor.to_string() },
+        filesize_approx: None,
     })
 }
 
@@ -341,7 +411,7 @@ async fn run_with_progress(
 fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSource<'_>) -> Vec<String> {
     let extractor_args = match cookies {
         CookieSource::None => "youtube:player_client=ios,mweb,web",
-        _ => "youtube:player_client=tv_embedded,web",
+        _ => "youtube:player_client=web",
     };
     let mut args: Vec<String> = vec![
         "-o".into(), tmp_path.into(),
