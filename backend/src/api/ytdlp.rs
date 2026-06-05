@@ -83,9 +83,15 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         "--no-playlist".to_string(),
         "--quiet".to_string(),
         "--no-warnings".to_string(),
-        "--extractor-args".to_string(),
-        "youtube:player_client=ios,web".to_string(),
     ];
+    // With cookies, web client authenticates correctly; ios client ignores cookies
+    if cookies.is_some() {
+        args.push("--extractor-args".to_string());
+        args.push("youtube:player_client=web".to_string());
+    } else {
+        args.push("--extractor-args".to_string());
+        args.push("youtube:player_client=ios,web".to_string());
+    }
     if let Some(path) = cookies {
         args.push("--cookies".to_string());
         args.push(path.to_string());
@@ -102,7 +108,13 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         .await
         .ok()?;
 
-    if !output.status.success() { return None; }
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+            log::warn!("yt-dlp info failed for {}: {}", url, stderr.trim());
+        }
+        return None;
+    }
 
     let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
 
@@ -326,13 +338,17 @@ async fn run_with_progress(
 }
 
 fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSource<'_>) -> Vec<String> {
+    let extractor_args = match cookies {
+        CookieSource::None => "youtube:player_client=ios,web",
+        _ => "youtube:player_client=web",
+    };
     let mut args: Vec<String> = vec![
         "-o".into(), tmp_path.into(),
         "-f".into(), format.into(),
         "--no-playlist".into(),
         "--newline".into(),
         "--extractor-args".into(),
-        "youtube:player_client=ios,web".into(),
+        extractor_args.into(),
     ];
     if audio_only {
         args.push("--extract-audio".into());
