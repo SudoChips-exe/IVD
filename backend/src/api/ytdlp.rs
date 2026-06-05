@@ -84,13 +84,14 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         "--quiet".to_string(),
         "--no-warnings".to_string(),
     ];
-    // With cookies, web client authenticates correctly; ios client ignores cookies
+    // tv_embedded bypasses po_token requirement on datacenter IPs and works with cookies.
+    // ios client avoids bot detection without cookies; web is last-resort fallback.
     if cookies.is_some() {
         args.push("--extractor-args".to_string());
-        args.push("youtube:player_client=web".to_string());
+        args.push("youtube:player_client=tv_embedded,web".to_string());
     } else {
         args.push("--extractor-args".to_string());
-        args.push("youtube:player_client=ios,web".to_string());
+        args.push("youtube:player_client=ios,mweb,web".to_string());
     }
     if let Some(path) = cookies {
         args.push("--cookies".to_string());
@@ -339,8 +340,8 @@ async fn run_with_progress(
 
 fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSource<'_>) -> Vec<String> {
     let extractor_args = match cookies {
-        CookieSource::None => "youtube:player_client=ios,web",
-        _ => "youtube:player_client=web",
+        CookieSource::None => "youtube:player_client=ios,mweb,web",
+        _ => "youtube:player_client=tv_embedded,web",
     };
     let mut args: Vec<String> = vec![
         "-o".into(), tmp_path.into(),
