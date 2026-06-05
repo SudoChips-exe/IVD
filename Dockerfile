@@ -26,15 +26,30 @@ RUN VITE_API_URL="" bun run build
 
 FROM debian:bookworm-slim
 
+# Install system deps + Node.js 20 (required by bgutil pot provider)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
+    curl \
+    git \
     python3 \
     python3-pip \
     ffmpeg \
     nginx \
     gettext-base \
-    && pip3 install yt-dlp curl-cffi --break-system-packages \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
+
+# Build bgutil pot provider server (generates YouTube po_tokens to bypass datacenter bot detection)
+RUN git clone --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil-pot \
+    && cd /opt/bgutil-pot/server \
+    && npm ci \
+    && npx tsc \
+    && npm prune --production \
+    && rm -rf /opt/bgutil-pot/.git /root/.npm
+
+# Install Python packages: yt-dlp, curl-cffi (TikTok), bgutil plugin (hooks yt-dlp → pot server)
+RUN pip3 install yt-dlp curl-cffi bgutil-ytdlp-pot-provider --break-system-packages
 
 COPY --from=backend-builder /app/target/release/video-downloader /usr/local/bin/video-downloader
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
