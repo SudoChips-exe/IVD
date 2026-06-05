@@ -52,8 +52,8 @@ RUN git clone --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.
 RUN pip3 install yt-dlp curl-cffi bgutil-ytdlp-pot-provider --break-system-packages
 
 # Configure yt-dlp to use bgutil script mode (invoked per-request, no background server needed)
-RUN mkdir -p /root/.config/yt-dlp && \
-    printf '--extractor-args "youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server"\n' \
+RUN mkdir -p /root/.config/yt-dlp \
+    && echo '--extractor-args "youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server"' \
     > /root/.config/yt-dlp/config
 
 COPY --from=backend-builder /app/target/release/video-downloader /usr/local/bin/video-downloader
