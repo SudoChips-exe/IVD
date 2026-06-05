@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-# Render injects $PORT; default to 80 for local docker
-PORT=${PORT:-80}
+# Render injects $PORT; default to 8080 for local docker
+PORT=${PORT:-8080}
 
 # Decode base64 cookies if provided
 if [ -n "$COOKIES_B64" ]; then
@@ -11,12 +11,13 @@ if [ -n "$COOKIES_B64" ]; then
     echo "[vidclaw] cookies.txt loaded"
 fi
 
-# Inject $PORT into nginx config
-envsubst '$PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
-
-# Backend always runs on internal port 8080
+# nginx takes the external port; backend runs on fixed internal port 8081
+export BACKEND_PORT=8081
 export SERVER_HOST=0.0.0.0
-export SERVER_PORT=8080
+export SERVER_PORT=8081
+
+# Inject $PORT and $BACKEND_PORT into nginx config
+envsubst '$PORT $BACKEND_PORT' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf
 
 # Start nginx in background, backend in foreground
 nginx -g "daemon off;" &
