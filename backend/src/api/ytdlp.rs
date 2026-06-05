@@ -101,6 +101,9 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         args.push("--extractor-args".to_string());
         args.push("youtube:player_client=ios,mweb,web".to_string());
     }
+    // Pass bgutil script provider directly (don't rely on yt-dlp config file)
+    args.push("--extractor-args".to_string());
+    args.push("youtubepot-bgutilscript:server_home=/opt/bgutil-pot".to_string());
     if let Some(path) = cookies {
         args.push("--cookies".to_string());
         args.push(path.to_string());
@@ -160,6 +163,8 @@ async fn try_get_info_nofmt(url: &str, cookies: Option<&str>) -> Option<VideoInf
         args.push("--extractor-args".to_string());
         args.push("youtube:player_client=ios,mweb,web".to_string());
     }
+    args.push("--extractor-args".to_string());
+    args.push("youtubepot-bgutilscript:server_home=/opt/bgutil-pot".to_string());
     if let Some(path) = cookies {
         args.push("--cookies".to_string());
         args.push(path.to_string());
@@ -420,6 +425,8 @@ fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSo
         "--newline".into(),
         "--extractor-args".into(),
         extractor_args.into(),
+        "--extractor-args".into(),
+        "youtubepot-bgutilscript:server_home=/opt/bgutil-pot".into(),
     ];
     if audio_only {
         args.push("--extract-audio".into());

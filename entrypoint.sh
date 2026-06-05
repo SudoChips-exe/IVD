@@ -4,6 +4,14 @@ set -e
 # Render injects $PORT; default to 8080 for local docker
 PORT=${PORT:-8080}
 
+# Diagnostic: verify pot plugins are installed and config is correct
+echo "[vidclaw] installed yt-dlp packages:"
+pip3 list 2>/dev/null | grep -iE 'yt-dlp|bgutil|get-pot' || echo "  (none found)"
+echo "[vidclaw] yt-dlp config:"
+cat /root/.config/yt-dlp/config 2>/dev/null || echo "  (no config file)"
+echo "[vidclaw] bgutil server dir:"
+ls /opt/bgutil-pot/server/build/ 2>/dev/null || echo "  (build dir missing)"
+
 # Decode base64 cookies if provided
 if [ -n "$COOKIES_B64" ]; then
     mkdir -p /root/.config/vidclaw
