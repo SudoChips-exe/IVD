@@ -11,11 +11,6 @@ if [ -n "$COOKIES_B64" ]; then
     echo "[vidclaw] cookies.txt loaded"
 fi
 
-# Start bgutil po_token provider (bypasses YouTube bot detection on datacenter IPs)
-node /opt/bgutil-pot/server/build/main.js &
-echo "[vidclaw] bgutil pot provider starting on :4416"
-sleep 3
-
 # nginx takes the external port; backend runs on fixed internal port 8081
 export BACKEND_PORT=8081
 export SERVER_HOST=0.0.0.0

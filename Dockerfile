@@ -26,7 +26,7 @@ RUN VITE_API_URL="" bun run build
 
 FROM debian:bookworm-slim
 
-# Install system deps + Node.js 20 (required by bgutil pot provider)
+# Install system deps + Node.js 20 (required by bgutil pot generator)
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     curl \
@@ -40,7 +40,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Build bgutil pot provider server (generates YouTube po_tokens to bypass datacenter bot detection)
+# Build bgutil pot provider scripts (generates YouTube po_tokens to bypass datacenter bot detection)
 RUN git clone --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.git /opt/bgutil-pot \
     && cd /opt/bgutil-pot/server \
     && npm ci \
@@ -48,8 +48,13 @@ RUN git clone --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.
     && npm prune --production \
     && rm -rf /opt/bgutil-pot/.git /root/.npm
 
-# Install Python packages: yt-dlp, curl-cffi (TikTok), bgutil plugin (hooks yt-dlp → pot server)
+# Install Python packages: yt-dlp, curl-cffi (TikTok), bgutil plugin (hooks yt-dlp → pot generator)
 RUN pip3 install yt-dlp curl-cffi bgutil-ytdlp-pot-provider --break-system-packages
+
+# Configure yt-dlp to use bgutil script mode (invoked per-request, no background server needed)
+RUN mkdir -p /root/.config/yt-dlp && \
+    printf '--extractor-args "youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server"\n' \
+    > /root/.config/yt-dlp/config
 
 COPY --from=backend-builder /app/target/release/video-downloader /usr/local/bin/video-downloader
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
