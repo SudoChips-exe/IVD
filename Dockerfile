@@ -48,12 +48,14 @@ RUN git clone --depth 1 https://github.com/Brainicism/bgutil-ytdlp-pot-provider.
     && npm prune --production \
     && rm -rf /opt/bgutil-pot/.git /root/.npm
 
-# Install Python packages: yt-dlp, curl-cffi (TikTok), bgutil plugin (hooks yt-dlp → pot generator)
-RUN pip3 install yt-dlp curl-cffi bgutil-ytdlp-pot-provider --break-system-packages
+# Install Python packages: yt-dlp, curl-cffi (TikTok), get-pot framework + bgutil provider
+RUN pip3 install yt-dlp curl-cffi yt-dlp-get-pot bgutil-ytdlp-pot-provider --break-system-packages
 
-# Configure yt-dlp to use bgutil script mode (invoked per-request, no background server needed)
+# Configure yt-dlp to use bgutil script mode (server_home = repo root, plugin appends server/build/)
+# Two-line format avoids shell quoting issues in yt-dlp config parser
 RUN mkdir -p /root/.config/yt-dlp \
-    && echo '--extractor-args "youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server"' \
+    && printf '%s\n%s\n' '--extractor-args' \
+       'youtubepot-bgutilscript:server_home=/opt/bgutil-pot' \
     > /root/.config/yt-dlp/config
 
 COPY --from=backend-builder /app/target/release/video-downloader /usr/local/bin/video-downloader
