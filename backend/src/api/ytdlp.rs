@@ -93,13 +93,14 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         "--quiet".to_string(),
         "--no-warnings".to_string(),
     ];
-    // android_vr client bypasses bot detection without cookies; web required for cookies auth.
+    // bgutil generates po_tokens for web-based clients only (not android_vr/ios).
+    // mweb,web ensures bgutil can provide po_token from datacenter IPs.
     if cookies.is_some() {
         args.push("--extractor-args".to_string());
         args.push("youtube:player_client=web".to_string());
     } else {
         args.push("--extractor-args".to_string());
-        args.push("youtube:player_client=android_vr,ios,mweb,web".to_string());
+        args.push("youtube:player_client=mweb,web".to_string());
     }
     // Pass bgutil script provider; server_home must point to server/ subdir (plugin appends build/)
     args.push("--extractor-args".to_string());
@@ -161,7 +162,7 @@ async fn try_get_info_nofmt(url: &str, cookies: Option<&str>) -> Option<VideoInf
         args.push("youtube:player_client=web".to_string());
     } else {
         args.push("--extractor-args".to_string());
-        args.push("youtube:player_client=android_vr,ios,mweb,web".to_string());
+        args.push("youtube:player_client=mweb,web".to_string());
     }
     args.push("--extractor-args".to_string());
     args.push("youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server".to_string());
@@ -415,7 +416,7 @@ async fn run_with_progress(
 
 fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSource<'_>) -> Vec<String> {
     let extractor_args = match cookies {
-        CookieSource::None => "youtube:player_client=android_vr,ios,mweb,web",
+        CookieSource::None => "youtube:player_client=mweb,web",
         _ => "youtube:player_client=web",
     };
     let mut args: Vec<String> = vec![

@@ -54,10 +54,15 @@ RUN pip3 install --upgrade yt-dlp curl-cffi yt-dlp-get-pot bgutil-ytdlp-pot-prov
 # Configure yt-dlp: bgutil script mode (server_home must point to the server/ subdir,
 # plugin appends build/ internally), and enable Node.js as JS runtime for bgutil execution
 RUN mkdir -p /root/.config/yt-dlp \
-    && printf '%s\n%s\n%s\n%s\n' \
+    && printf '%s\n%s\n%s\n%s\n%s\n%s\n' \
        '--extractor-args' 'youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server' \
        '--js-runtimes' 'node' \
+       '--remote-components' 'ejs:github' \
     > /root/.config/yt-dlp/config
+
+# Pre-warm EJS challenge solver cache so first request on Render doesn't pay the GitHub download cost
+RUN yt-dlp --no-download --remote-components ejs:github \
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ" 2>/dev/null || true
 
 COPY --from=backend-builder /app/target/release/video-downloader /usr/local/bin/video-downloader
 COPY --from=frontend-builder /app/dist /usr/share/nginx/html
