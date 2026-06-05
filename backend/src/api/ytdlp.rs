@@ -93,17 +93,17 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
         "--quiet".to_string(),
         "--no-warnings".to_string(),
     ];
-    // web client uses auth cookies correctly; ios/mweb avoid bot detection without cookies.
+    // android_vr client bypasses bot detection without cookies; web required for cookies auth.
     if cookies.is_some() {
         args.push("--extractor-args".to_string());
         args.push("youtube:player_client=web".to_string());
     } else {
         args.push("--extractor-args".to_string());
-        args.push("youtube:player_client=ios,mweb,web".to_string());
+        args.push("youtube:player_client=android_vr,ios,mweb,web".to_string());
     }
-    // Pass bgutil script provider directly (don't rely on yt-dlp config file)
+    // Pass bgutil script provider; server_home must point to server/ subdir (plugin appends build/)
     args.push("--extractor-args".to_string());
-    args.push("youtubepot-bgutilscript:server_home=/opt/bgutil-pot".to_string());
+    args.push("youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server".to_string());
     if let Some(path) = cookies {
         args.push("--cookies".to_string());
         args.push(path.to_string());
@@ -161,10 +161,10 @@ async fn try_get_info_nofmt(url: &str, cookies: Option<&str>) -> Option<VideoInf
         args.push("youtube:player_client=web".to_string());
     } else {
         args.push("--extractor-args".to_string());
-        args.push("youtube:player_client=ios,mweb,web".to_string());
+        args.push("youtube:player_client=android_vr,ios,mweb,web".to_string());
     }
     args.push("--extractor-args".to_string());
-    args.push("youtubepot-bgutilscript:server_home=/opt/bgutil-pot".to_string());
+    args.push("youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server".to_string());
     if let Some(path) = cookies {
         args.push("--cookies".to_string());
         args.push(path.to_string());
@@ -415,7 +415,7 @@ async fn run_with_progress(
 
 fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSource<'_>) -> Vec<String> {
     let extractor_args = match cookies {
-        CookieSource::None => "youtube:player_client=ios,mweb,web",
+        CookieSource::None => "youtube:player_client=android_vr,ios,mweb,web",
         _ => "youtube:player_client=web",
     };
     let mut args: Vec<String> = vec![
@@ -426,7 +426,7 @@ fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSo
         "--extractor-args".into(),
         extractor_args.into(),
         "--extractor-args".into(),
-        "youtubepot-bgutilscript:server_home=/opt/bgutil-pot".into(),
+        "youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server".into(),
     ];
     if audio_only {
         args.push("--extract-audio".into());
