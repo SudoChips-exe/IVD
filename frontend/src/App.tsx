@@ -53,8 +53,21 @@ function App() {
 
       <main className="main-content">
         <div className="hero-section" id="home">
+          <div className="hero-glow-orb hero-glow-orb--cyan" />
+          <div className="hero-glow-orb hero-glow-orb--purple" />
+          <div className="hero-eyebrow">
+            <span className="hero-status-dot" />
+            Free &middot; No account required
+          </div>
           <h1>VIDCLAW</h1>
-          <p>Extract and download high-quality videos from Instagram, TikTok, YouTube, Twitter, and Facebook — no sign-up required.</p>
+          <p>Download high-quality video and audio from any major social platform. Instant, private, no limits.</p>
+          <div className="hero-chips">
+            <span>Instagram</span>
+            <span>TikTok</span>
+            <span>YouTube</span>
+            <span>Twitter</span>
+            <span>Facebook</span>
+          </div>
         </div>
 
         <div className="download-section">
