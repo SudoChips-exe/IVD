@@ -28,16 +28,6 @@ const CookieUpload: FC = () => {
     }
   }
 
-  const handleRemove = async () => {
-    try {
-      await api.deleteCookies()
-      setActive(false)
-      setMessage('Cookies removed.')
-    } catch {
-      setError('Failed to remove cookies.')
-    }
-  }
-
   return (
     <div className="cookie-upload">
       <div className="cookie-header">
@@ -58,11 +48,6 @@ const CookieUpload: FC = () => {
         >
           {uploading ? 'Uploading...' : 'Upload cookies.txt'}
         </button>
-        {active && (
-          <button className="cookie-btn danger" onClick={handleRemove}>
-            Remove
-          </button>
-        )}
       </div>
       <input
         ref={fileRef}
