@@ -59,34 +59,35 @@ async fn build_session_cookies(url: &str) -> Option<String> {
 }
 
 pub async fn get_info(url: &str) -> AppResult<VideoInfo> {
-    // Try without auth, then session cookies, then cookies file
-    if let Some(info) = try_get_info(url, None).await {
+    // IPv6: YouTube's datacenter IPv6 blocks are far less comprehensive than IPv4.
+    // Try IPv6 first; if the host has no IPv6 routing it fails fast and we fall through.
+    if get_proxy().is_none() {
+        if let Some(info) = try_get_info(url, None, true).await { return Ok(info); }
+    }
+    if let Some(info) = try_get_info(url, None, false).await {
         return Ok(info);
     }
     if let Some(session_file) = build_session_cookies(url).await {
-        let result = try_get_info(url, Some(&session_file)).await;
+        let result = try_get_info(url, Some(&session_file), false).await;
         let _ = tokio::fs::remove_file(&session_file).await;
         if let Some(info) = result { return Ok(info); }
     }
     let cookies_path = expand_home(COOKIES_FILE);
     if tokio::fs::metadata(&cookies_path).await.is_ok() {
-        if let Some(info) = try_get_info(url, Some(&cookies_path)).await {
+        if let Some(info) = try_get_info(url, Some(&cookies_path), false).await {
             return Ok(info);
         }
-        // Fallback: --print skips format selection entirely (succeeds even when YouTube
-        // restricts format URLs to datacenter IPs due to po_token requirements)
-        if let Some(info) = try_get_info_nofmt(url, Some(&cookies_path)).await {
+        if let Some(info) = try_get_info_nofmt(url, Some(&cookies_path), false).await {
             return Ok(info);
         }
     }
-    // Last resort: --print without cookies (gets metadata if video is public)
-    if let Some(info) = try_get_info_nofmt(url, None).await {
+    if let Some(info) = try_get_info_nofmt(url, None, false).await {
         return Ok(info);
     }
     Err(AppError::PlatformError("Could not fetch video info. Check the URL or platform support.".to_string()))
 }
 
-async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
+async fn try_get_info(url: &str, cookies: Option<&str>, force_ipv6: bool) -> Option<VideoInfo> {
     let mut args = vec![
         "--dump-json".to_string(),
         "--no-playlist".to_string(),
@@ -112,6 +113,8 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
     if let Some(proxy) = get_proxy() {
         args.push("--proxy".to_string());
         args.push(proxy);
+    } else if force_ipv6 {
+        args.push("--force-ipv6".to_string());
     }
     args.push(url.to_string());
 
@@ -151,7 +154,7 @@ async fn try_get_info(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
 
 /// Extracts basic video info using --print, which does NOT trigger format selection.
 /// Works even when YouTube restricts downloadable formats (e.g. po_token required on datacenter IPs).
-async fn try_get_info_nofmt(url: &str, cookies: Option<&str>) -> Option<VideoInfo> {
+async fn try_get_info_nofmt(url: &str, cookies: Option<&str>, force_ipv6: bool) -> Option<VideoInfo> {
     let mut args = vec![
         "--no-playlist".to_string(),
         "--quiet".to_string(),
@@ -173,6 +176,8 @@ async fn try_get_info_nofmt(url: &str, cookies: Option<&str>) -> Option<VideoInf
     if let Some(proxy) = get_proxy() {
         args.push("--proxy".to_string());
         args.push(proxy);
+    } else if force_ipv6 {
+        args.push("--force-ipv6".to_string());
     }
     // Each --print arg outputs one line; order: title, uploader, duration, thumbnail, extractor
     for field in &["%(title)s", "%(uploader)s", "%(duration)s", "%(thumbnail)s", "%(extractor_key)s"] {
@@ -243,8 +248,33 @@ pub async fn extract_with_progress(
         };
     }
 
-    // Try without cookies (YouTube, TikTok, Twitter)
-    match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::None, &tx, &cancelled).await {
+    // Try with IPv6 first (YouTube's datacenter IPv6 blocks are less comprehensive than IPv4)
+    if get_proxy().is_none() {
+        match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::None, true, &tx, &cancelled).await {
+            Ok(()) => {
+                *result_store.lock().await = Some(JobResult { file_path: tmp_path, filename: filename.clone() });
+                let _ = tx.send(JobEvent::Done { filename });
+                return;
+            }
+            Err(ref e) if e == "Cancelled" => {
+                let _ = tokio::fs::remove_file(&tmp_path).await;
+                let _ = tx.send(JobEvent::Cancelled);
+                return;
+            }
+            Err(ref stderr) => {
+                if let Some(msg) = hard_error_message(stderr) {
+                    let _ = tokio::fs::remove_file(&tmp_path).await;
+                    let _ = tx.send(JobEvent::Error { message: msg });
+                    return;
+                }
+            }
+        }
+        check_cancelled!();
+        let _ = tokio::fs::remove_file(&tmp_path).await;
+    }
+
+    // Try without cookies via IPv4 (YouTube, TikTok, Twitter)
+    match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::None, false, &tx, &cancelled).await {
         Ok(()) => {
             *result_store.lock().await = Some(JobResult { file_path: tmp_path, filename: filename.clone() });
             let _ = tx.send(JobEvent::Done { filename });
@@ -270,7 +300,7 @@ pub async fn extract_with_progress(
     if let Some(session_file) = build_session_cookies(&url).await {
         let _ = tx.send(JobEvent::Authenticating { method: "session token".into() });
         let _ = tokio::fs::remove_file(&tmp_path).await;
-        let result = run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::File(&session_file), &tx, &cancelled).await;
+        let result = run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::File(&session_file), false, &tx, &cancelled).await;
         let _ = tokio::fs::remove_file(&session_file).await; // always clean up temp cookies
         match result {
             Ok(()) => {
@@ -294,7 +324,7 @@ pub async fn extract_with_progress(
     if tokio::fs::metadata(&cookies_path).await.is_ok() {
         let _ = tx.send(JobEvent::Authenticating { method: "cookies file".into() });
         let _ = tokio::fs::remove_file(&tmp_path).await;
-        match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::File(&cookies_path), &tx, &cancelled).await {
+        match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::File(&cookies_path), false, &tx, &cancelled).await {
             Ok(()) => {
                 *result_store.lock().await = Some(JobResult { file_path: tmp_path, filename: filename.clone() });
                 let _ = tx.send(JobEvent::Done { filename });
@@ -315,7 +345,7 @@ pub async fn extract_with_progress(
         check_cancelled!();
         let _ = tx.send(JobEvent::Authenticating { method: browser.to_string() });
         let _ = tokio::fs::remove_file(&tmp_path).await;
-        match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::Browser(browser), &tx, &cancelled).await {
+        match run_with_progress(&url, &tmp_path, &format, audio_only, CookieSource::Browser(browser), false, &tx, &cancelled).await {
             Ok(()) => {
                 *result_store.lock().await = Some(JobResult { file_path: tmp_path, filename: filename.clone() });
                 let _ = tx.send(JobEvent::Done { filename });
@@ -350,10 +380,11 @@ async fn run_with_progress(
     format: &str,
     audio_only: bool,
     cookies: CookieSource<'_>,
+    force_ipv6: bool,
     tx: &broadcast::Sender<JobEvent>,
     cancelled: &Arc<AtomicBool>,
 ) -> Result<(), String> {
-    let mut args = build_args(tmp_path, format, audio_only, &cookies);
+    let mut args = build_args(tmp_path, format, audio_only, &cookies, force_ipv6);
     args.push(url.into());
 
     let mut child = Command::new(ytdlp_bin())
@@ -414,7 +445,7 @@ async fn run_with_progress(
     Err(stderr_out)
 }
 
-fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSource<'_>) -> Vec<String> {
+fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSource<'_>, force_ipv6: bool) -> Vec<String> {
     let extractor_args = match cookies {
         CookieSource::None => "youtube:player_client=mweb,web",
         _ => "youtube:player_client=web",
@@ -449,6 +480,8 @@ fn build_args(tmp_path: &str, format: &str, audio_only: bool, cookies: &CookieSo
     if let Some(proxy) = get_proxy() {
         args.push("--proxy".into());
         args.push(proxy);
+    } else if force_ipv6 {
+        args.push("--force-ipv6".into());
     }
 
     args
