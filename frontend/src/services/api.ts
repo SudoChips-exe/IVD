@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios'
-import { VideoInfo } from '../types'
+import { PlaylistInfo, VideoInfo } from '../types'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:8080'
 
@@ -52,6 +52,11 @@ export const api = {
 
   async getCookiesStatus(): Promise<{ active: boolean }> {
     const res = await client.get('/api/cookies/status')
+    return res.data
+  },
+
+  async getPlaylistInfo(url: string): Promise<PlaylistInfo> {
+    const res = await client.get('/api/playlist-info', { params: { url } })
     return res.data
   },
 

@@ -51,6 +51,22 @@ pub struct VideoInfo {
     pub thumbnail_url: Option<String>,
     pub filesize_approx: Option<u64>,
     pub platform: String,
+    pub is_image: bool,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct PlaylistEntry {
+    pub url: String,
+    pub title: String,
+    pub thumbnail: Option<String>,
+    pub duration_seconds: Option<u64>,
+}
+
+#[derive(Debug, Serialize, Clone)]
+pub struct PlaylistInfo {
+    pub title: String,
+    pub entries: Vec<PlaylistEntry>,
+    pub total: usize,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

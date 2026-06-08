@@ -4,6 +4,7 @@ pub mod download;
 pub mod file_delivery;
 pub mod health;
 pub mod info;
+pub mod playlist;
 pub mod progress;
 
 use actix_web::web;
@@ -12,6 +13,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(
         web::scope("/api")
             .route("/info", web::post().to(info::video_info))
+            .route("/playlist-info", web::get().to(playlist::playlist_info))
             .route("/download", web::post().to(download::download_video))
             .route("/cancel/{job_id}", web::post().to(cancel::cancel_download))
             .route("/progress/{job_id}", web::get().to(progress::progress_sse))

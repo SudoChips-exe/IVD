@@ -16,36 +16,40 @@ interface QualitySelectorProps {
   audioOnly: boolean
   onAudioOnlyChange: (v: boolean) => void
   disabled?: boolean
+  isImage?: boolean
 }
 
-const QualitySelector: FC<QualitySelectorProps> = ({ value, onChange, audioOnly, onAudioOnlyChange, disabled }) => (
-  <div className="quality-row">
-    <div className="quality-selector">
-      <span className="quality-label">Quality</span>
-      <div className="quality-options">
-        {OPTIONS.map(opt => (
-          <button
-            key={opt.value}
-            className={`quality-btn${value === opt.value && !audioOnly ? ' active' : ''}`}
-            onClick={() => { onAudioOnlyChange(false); onChange(opt.value) }}
-            disabled={disabled || audioOnly}
-            type="button"
-          >
-            {opt.label}
-          </button>
-        ))}
+const QualitySelector: FC<QualitySelectorProps> = ({ value, onChange, audioOnly, onAudioOnlyChange, disabled, isImage }) => {
+  if (isImage) return null
+  return (
+    <div className="quality-row">
+      <div className="quality-selector">
+        <span className="quality-label">Quality</span>
+        <div className="quality-options">
+          {OPTIONS.map(opt => (
+            <button
+              key={opt.value}
+              className={`quality-btn${value === opt.value && !audioOnly ? ' active' : ''}`}
+              onClick={() => { onAudioOnlyChange(false); onChange(opt.value) }}
+              disabled={disabled || audioOnly}
+              type="button"
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
       </div>
+      <button
+        className={`audio-only-btn${audioOnly ? ' active' : ''}`}
+        onClick={() => onAudioOnlyChange(!audioOnly)}
+        disabled={disabled}
+        type="button"
+        title="Download audio only as MP3"
+      >
+        MP3
+      </button>
     </div>
-    <button
-      className={`audio-only-btn${audioOnly ? ' active' : ''}`}
-      onClick={() => onAudioOnlyChange(!audioOnly)}
-      disabled={disabled}
-      type="button"
-      title="Download audio only as MP3"
-    >
-      MP3
-    </button>
-  </div>
-)
+  )
+}
 
 export default QualitySelector

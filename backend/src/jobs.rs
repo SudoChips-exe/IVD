@@ -23,6 +23,7 @@ pub struct JobHandle {
 pub struct JobResult {
     pub file_path: String,
     pub filename: String,
+    pub content_type: String,
 }
 
 #[derive(Clone)]

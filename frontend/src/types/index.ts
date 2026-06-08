@@ -13,6 +13,20 @@ export interface VideoInfo {
   thumbnail_url?: string
   filesize_approx?: number
   platform: string
+  is_image?: boolean
+}
+
+export interface PlaylistEntry {
+  url: string
+  title: string
+  thumbnail?: string
+  duration_seconds?: number
+}
+
+export interface PlaylistInfo {
+  title: string
+  entries: PlaylistEntry[]
+  total: number
 }
 
 export interface HistoryEntry {

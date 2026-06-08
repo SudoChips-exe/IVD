@@ -34,7 +34,7 @@ pub async fn download_file(
     jobs.cleanup(&job_id).await;
 
     Ok(HttpResponse::Ok()
-        .append_header((header::CONTENT_TYPE, "video/mp4"))
+        .append_header((header::CONTENT_TYPE, result.content_type.as_str()))
         .append_header((
             header::CONTENT_DISPOSITION,
             format!("attachment; filename=\"{}\"", filename),

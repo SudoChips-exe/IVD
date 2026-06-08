@@ -13,7 +13,9 @@ import { useDownloadQueue } from './hooks/useDownloadQueue'
 import { useVideoInfo } from './hooks/useVideoInfo'
 import { useScrollSpy } from './hooks/useScrollSpy'
 import { getHistory, clearHistory } from './utils/history'
-import { HistoryEntry } from './types'
+import { isPlaylistUrl } from './utils/urlDetection'
+import { HistoryEntry, PlaylistInfo } from './types'
+import { api } from './services/api'
 
 function App() {
   useScrollSpy()
@@ -21,27 +23,54 @@ function App() {
   const [quality, setQuality] = useState<Quality>('best')
   const [audioOnly, setAudioOnly] = useState(false)
   const [history, setHistory] = useState<HistoryEntry[]>([])
+  const [playlistInfo, setPlaylistInfo] = useState<PlaylistInfo | null>(null)
+  const [playlistLoading, setPlaylistLoading] = useState(false)
 
-  const { info, loading: infoLoading, error: infoError, clear: clearInfo } = useVideoInfo(url)
+  const isPlaylist = isPlaylistUrl(url)
+  const { info, loading: infoLoading, error: infoError, clear: clearInfo } = useVideoInfo(isPlaylist ? '' : url)
   const { items, addDownload, cancelItem, removeItem } = useDownloadQueue()
 
   useEffect(() => {
     setHistory(getHistory())
   }, [])
 
-  // Refresh history when a download completes
   useEffect(() => {
     if (items.some(i => i.state === 'done')) {
       setHistory(getHistory())
     }
   }, [items])
 
-  const handleDownload = async () => {
+  useEffect(() => {
+    if (!isPlaylist) {
+      setPlaylistInfo(null)
+      return
+    }
+    const trimmed = url.trim()
+    setPlaylistInfo(null)
+    setPlaylistLoading(true)
+    let cancelled = false
+    api.getPlaylistInfo(trimmed)
+      .then(data => { if (!cancelled) setPlaylistInfo(data) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setPlaylistLoading(false) })
+    return () => { cancelled = true }
+  }, [url, isPlaylist])
+
+  const handleDownload = () => {
     const trimmed = url.trim()
     if (!trimmed) return
     clearInfo()
     setUrl('')
     addDownload(trimmed, quality, audioOnly, info ?? undefined)
+  }
+
+  const handleDownloadAll = () => {
+    if (!playlistInfo) return
+    setUrl('')
+    setPlaylistInfo(null)
+    playlistInfo.entries.forEach(entry => {
+      addDownload(entry.url, quality, audioOnly)
+    })
   }
 
   const activeItems = items.filter(i => i.state === 'downloading')
@@ -74,22 +103,46 @@ function App() {
           <URLInput
             value={url}
             onChange={setUrl}
-            onSubmit={handleDownload}
+            onSubmit={isPlaylist ? handleDownloadAll : handleDownload}
             disabled={false}
           />
 
-          <VideoPreview info={info} loading={infoLoading} error={infoError} />
+          {isPlaylist && (
+            <div className="playlist-banner">
+              <div className="playlist-banner-info">
+                {playlistLoading ? (
+                  <span className="playlist-loading">Loading playlist…</span>
+                ) : playlistInfo ? (
+                  <>
+                    <span className="playlist-title">{playlistInfo.title}</span>
+                    <span className="playlist-count">{playlistInfo.total} video{playlistInfo.total !== 1 ? 's' : ''}</span>
+                  </>
+                ) : null}
+              </div>
+              <button
+                className="playlist-download-all-btn"
+                type="button"
+                onClick={handleDownloadAll}
+                disabled={!playlistInfo || playlistLoading}
+              >
+                Download all
+              </button>
+            </div>
+          )}
+
+          {!isPlaylist && <VideoPreview info={info} loading={infoLoading} error={infoError} />}
 
           <QualitySelector
             value={quality}
             onChange={setQuality}
             audioOnly={audioOnly}
             onAudioOnlyChange={setAudioOnly}
+            isImage={info?.is_image}
           />
 
           <DownloadButton
-            onClick={handleDownload}
-            disabled={!url.trim()}
+            onClick={isPlaylist ? handleDownloadAll : handleDownload}
+            disabled={!url.trim() || (isPlaylist && (!playlistInfo || playlistLoading))}
             loading={false}
           />
         </div>
@@ -163,6 +216,26 @@ function App() {
                         {new Date(entry.timestamp).toLocaleDateString()}
                       </span>
                     </div>
+                  </div>
+                  <div className="history-actions">
+                    <button
+                      className="history-action-btn"
+                      type="button"
+                      title="Re-download"
+                      onClick={() => addDownload(entry.url, entry.quality as Quality, entry.audioOnly)}
+                      aria-label="Re-download"
+                    >
+                      ↺
+                    </button>
+                    <button
+                      className="history-action-btn"
+                      type="button"
+                      title="Copy URL"
+                      onClick={() => navigator.clipboard.writeText(entry.url).catch(() => {})}
+                      aria-label="Copy URL"
+                    >
+                      ⎘
+                    </button>
                   </div>
                 </div>
               ))}

@@ -32,10 +32,21 @@ const DownloadQueueItem: FC<Props> = ({ item, onCancel, onRemove }) => {
             {state === 'cancelled' && <span className="queue-state-badge queue-state-badge--cancelled">Cancelled</span>}
           </div>
         </div>
-        <div className="queue-actions">
+        <div className="queue-actions" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
           {state === 'downloading' && (
             <button className="queue-cancel-btn" onClick={onCancel} type="button">
               Cancel
+            </button>
+          )}
+          {state === 'done' && (
+            <button
+              className="queue-remove-btn"
+              type="button"
+              title="Copy source URL"
+              onClick={() => navigator.clipboard.writeText(item.url).catch(() => {})}
+              aria-label="Copy URL"
+            >
+              ⎘
             </button>
           )}
           {state !== 'downloading' && (

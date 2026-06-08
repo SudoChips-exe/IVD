@@ -22,6 +22,13 @@ export function detectPlatform(url: string): Platform {
   }
 }
 
+export function isPlaylistUrl(url: string): boolean {
+  const lower = url.toLowerCase()
+  if ((lower.includes('youtube.com') || lower.includes('youtu.be')) && lower.includes('list=')) return true
+  if (lower.includes('tiktok.com/@') && !lower.includes('/video/')) return true
+  return false
+}
+
 export function isValidUrl(url: string): boolean {
   try {
     new URL(url)
