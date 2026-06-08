@@ -1,503 +1,195 @@
-# Architecture & Design Document
+# VIDCLAW — Architecture
 
 ## System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     USER BROWSER (Frontend)                     │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │   React + TypeScript + Vite                             │  │
-│  │  ┌─────────────────────────────────────────────────┐    │  │
-│  │  │ URL Input Component → Validation → Download    │    │  │
-│  │  │ Trigger HTTP POST /api/download                │    │  │
-│  │  └─────────────────────────────────────────────────┘    │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└────────────────────┬───────────────────────────────────────────┘
-                     │ HTTP POST with URL
-                     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│            BACKEND SERVER (Rust + Actix-web)                   │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │ HTTP Request Handler                                    │  │
-│  │ ├─ Validate URL format & platform                      │  │
-│  │ ├─ Rate limiting check                                 │  │
-│  │ └─ Route to appropriate platform adapter              │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Platform Adapters (Modular)                            │  │
-│  │ ├─ Instagram Adapter    → Instagram API calls         │  │
-│  │ ├─ TikTok Adapter       → TikTok API calls            │  │
-│  │ ├─ YouTube Adapter      → YouTube Data API calls      │  │
-│  │ ├─ Twitter Adapter      → Twitter API v2 calls        │  │
-│  │ ├─ Facebook Adapter     → Facebook Graph API calls    │  │
-│  │ └─ Snapchat Adapter     → Snapchat API calls          │  │
-│  └──────────────────────────────────────────────────────────┘  │
-│  ┌──────────────────────────────────────────────────────────┐  │
-│  │ Video Processing & Streaming                           │  │
-│  │ ├─ Fetch video metadata (title, duration, codecs)     │  │
-│  │ ├─ Retrieve direct video URL with audio stream        │  │
-│  │ ├─ Stream video bytes to client (no disk storage)     │  │
-│  │ └─ Set HTTP headers (Content-Disposition, MIME type) │  │
-│  └──────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
-                     │ HTTP Response (Video Stream)
-                     ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              USER'S DEVICE (Browser Download)                   │
-│         Video saved locally with audio preserved                │
-└─────────────────────────────────────────────────────────────────┘
+Browser (React + TypeScript + Vite)
+  │
+  │  POST /api/info         → VideoInfo { title, thumbnail, is_image, ... }
+  │  POST /api/download     → { job_id }
+  │  GET  /api/progress/:id → SSE events (progress / merging / done / error)
+  │  GET  /api/file/:id     → file stream (video/mp4, image/jpeg, audio/mpeg, ...)
+  │  GET  /api/playlist-info?url= → PlaylistInfo { title, entries[] }
+  ▼
+nginx (port 80 / $PORT on Render)
+  │ proxy_pass to backend:8081
+  ▼
+Rust + Actix-web (port 8081 in Docker, 8080 locally)
+  │
+  ├── Rate limiter middleware (global + per-IP)
+  ├── CORS middleware
+  │
+  ├── handlers/info.rs       → ytdlp::get_info()
+  ├── handlers/download.rs   → jobs::JobStore::spawn() → ytdlp::extract_with_progress()
+  ├── handlers/progress.rs   → SSE stream from broadcast::Receiver<JobEvent>
+  ├── handlers/file_delivery.rs → stream file from disk
+  ├── handlers/playlist.rs   → ytdlp::get_playlist_info()
+  └── handlers/cookies.rs    → read/write ~/.config/vidclaw/cookies.txt
+       │
+       ▼
+  api/ytdlp.rs  (yt-dlp subprocess — the core engine)
+       │
+       ├── get_info()              --dump-json → VideoInfo
+       ├── get_playlist_info()     --flat-playlist --dump-json → PlaylistInfo
+       └── extract_with_progress() multi-step fallback chain → file on disk
 ```
 
 ---
 
-## Backend Architecture (Rust)
+## Backend: api/ytdlp.rs
 
-### Project Structure
+This is the most critical file. All download logic lives here.
+
+### `get_info(url)`
+
+Tries to extract video metadata using `yt-dlp --dump-json`. Falls back through:
+1. IPv6 + no cookies
+2. IPv4 + no cookies
+3. Session cookies (env vars)
+4. Cookies file
+5. `try_get_info_nofmt` — uses `--print` fields instead of `--dump-json` for platforms that fail format selection
+
+Special case: if yt-dlp says "There is no video in this post" or "No video formats found", returns `VideoInfo { is_image: true }` instead of an error.
+
+### `extract_with_progress(url, quality, audio_only, tx, result_store, cancelled)`
+
+Runs in a spawned task. Streams `JobEvent` values over a `broadcast::Sender`. Tries each step until one succeeds:
 
 ```
-backend/
-├── Cargo.toml                 # Rust dependencies & metadata
-├── Cargo.lock                 # Dependency lock file
-├── .env.example               # Environment variables template
-├── src/
-│   ├── main.rs               # Application entry point & server setup
-│   ├── lib.rs                # Library exports
-│   ├── config.rs             # Configuration management (env vars, API keys)
-│   ├── error.rs              # Error types & handling
-│   ├── models.rs             # Data structures (URL, VideoMetadata, etc.)
-│   ├── api/
-│   │   ├── mod.rs            # API module exports
-│   │   ├── instagram.rs       # Instagram video extraction
-│   │   ├── tiktok.rs          # TikTok video extraction
-│   │   ├── youtube.rs         # YouTube video extraction
-│   │   ├── twitter.rs         # Twitter/X video extraction
-│   │   ├── facebook.rs        # Facebook video extraction
-│   │   ├── snapchat.rs        # Snapchat video extraction
-│   │   └── common.rs          # Shared utilities (HTTP client, etc.)
-│   ├── handlers/
-│   │   ├── mod.rs            # Handler module exports
-│   │   ├── download.rs        # POST /api/download handler
-│   │   └── health.rs          # GET /health handler
-│   ├── middleware/
-│   │   ├── mod.rs            # Middleware exports
-│   │   ├── rate_limit.rs      # Rate limiting middleware
-│   │   └── logging.rs         # Request logging middleware
-│   └── util.rs               # Helper functions (URL validation, etc.)
-├── tests/
-│   ├── integration_tests.rs  # End-to-end tests
-│   └── platform_tests.rs     # Per-platform adapter tests
-└── Dockerfile                # Container configuration
+Step 1: yt-dlp with video format, IPv6, no cookies
+Step 2: yt-dlp with video format, IPv4, no cookies
+Step 3: yt-dlp with video format, session cookies (INSTAGRAM_SESSION_ID / FACEBOOK_SESSION_COOKIES)
+Step 4: yt-dlp with video format, cookies file (~/.config/vidclaw/cookies.txt)
+Step 5: yt-dlp with video format, browser cookies (chrome/chromium/firefox/brave/edge)
+Step 6: image mode (-f best, no --merge-output-format), steps 1–5 repeated
+Step 7: --print "%(url)s" --allow-unplayable-formats → reqwest HTTP download
 ```
 
-### Key Components
+Hard error strings (video deleted, private, geo-blocked, copyright) abort the chain immediately without trying remaining steps.
 
-#### 1. **main.rs** — Application Bootstrap
-```rust
-// Initializes Actix-web server
-// Configures routes and middleware
-// Starts listening on PORT (default 8080)
+### yt-dlp arguments — what they do and why
+
+| Argument | Why it's there |
+|---|---|
+| `--extractor-args "youtubepot-bgutilscript:server_home=/opt/bgutil-pot/server"` | Solves YouTube's po_token challenge for datacenter IPs. Remove this and YouTube breaks on Render. |
+| `--extractor-args "youtube:player_client=mweb,web"` | YouTube client targets for unauthenticated requests on datacenter IPs |
+| `--extractor-args "youtube:player_client=web"` | YouTube client target for authenticated (cookies) requests |
+| `--merge-output-format mp4` | Mux bestvideo + bestaudio into MP4 via ffmpeg. Skipped for image mode. |
+| `--no-playlist` | Prevents yt-dlp from treating a playlist URL as a playlist in single-download mode |
+| `--newline` | Makes yt-dlp flush progress lines immediately (needed for SSE streaming) |
+| `--allow-unplayable-formats --no-check-formats` | Used in direct HTTP fallback to resolve image URLs yt-dlp refuses to "download" |
+
+### Output file handling
+
+Downloads write to `/tmp/vidclaw_{uuid}/media.%(ext)s`. The actual extension is determined by yt-dlp at runtime (jpg, mp4, webm, mp3, etc.). `find_output_file()` scans the dir for the first non-empty file. `content_type_from_path()` derives the MIME type from the extension. This is why `file_delivery.rs` must use `result.content_type` — do not hardcode `video/mp4`.
+
+---
+
+## Frontend Architecture
+
+### Download Queue State Machine (`useDownloadQueue.ts`)
+
+Each download item goes through: `downloading → done | error | cancelled`
+
+1. `addDownload(url, quality, audioOnly, info?)` — creates queue item, POSTs to `/api/download`
+2. Opens SSE connection to `/api/progress/:job_id`
+3. Handles events: `progress` / `authenticating` / `merging` / `done` / `cancelled` / `error`
+4. On `done`: GETs `/api/file/:job_id`, creates blob URL, triggers `<a download>` click
+5. Saves to localStorage history (if `info` is present)
+
+### URL → Info → Download Flow (`App.tsx`)
+
+```
+URL typed
+  → isPlaylistUrl()? → show playlist banner, fetch /api/playlist-info
+  → else → useVideoInfo() debounced 900ms → /api/info → VideoInfo
+              → VideoPreview shows thumbnail/title/duration
+              → QualitySelector hidden if is_image=true
+
+User clicks Download
+  → isPlaylist? → handleDownloadAll() → queue each playlist entry
+  → else → handleDownload() → addDownload(url, quality, audioOnly, info)
 ```
 
-#### 2. **config.rs** — Configuration Management
-- Loads environment variables
-- Validates required API keys
-- Provides configuration to handlers
+### Key Frontend Files
 
-#### 3. **models.rs** — Data Structures
+| File | Purpose |
+|---|---|
+| `App.tsx` | Root — URL state, playlist state, queue/history rendering |
+| `hooks/useDownloadQueue.ts` | SSE state machine, file save |
+| `hooks/useVideoInfo.ts` | Debounced info fetch (skips playlist URLs) |
+| `services/api.ts` | All axios calls to backend |
+| `utils/urlDetection.ts` | `detectPlatform`, `isPlaylistUrl`, `isValidUrl` |
+| `utils/history.ts` | localStorage read/write |
+| `components/QualitySelector.tsx` | Returns null when `isImage=true` |
+| `components/DownloadQueueItem.tsx` | Progress bar, copy URL, cancel, remove |
+| `styles/components.css` | All component CSS (single file) |
 
-```rust
-// Represents a download request
-pub struct DownloadRequest {
-    pub url: String,           // Social media video URL
-    pub platform: Platform,    // Detected platform (Instagram, TikTok, etc.)
-}
+---
 
-// Represents video metadata
-pub struct VideoMetadata {
-    pub title: String,
-    pub duration_seconds: u32,
-    pub author: String,
-    pub video_url: String,           // Direct URL to video file
-    pub audio_url: Option<String>,   // Separate audio stream (if needed)
-    pub thumbnail_url: String,
-    pub original_platform: Platform,
-}
+## Docker / Deployment
 
-// Platform enum
-pub enum Platform {
-    Instagram,
-    TikTok,
-    YouTube,
-    Twitter,
-    Facebook,
-    Snapchat,
-    Unknown,
-}
+```
+Dockerfile (multi-stage):
+  Stage 1: node — builds frontend (dist/)
+  Stage 2: rust — compiles backend binary
+  Stage 3: final — debian slim + yt-dlp + ffmpeg + bgutil plugin + nginx
+
+entrypoint.sh:
+  1. Decode COOKIES_B64 → /root/.config/vidclaw/cookies.txt
+  2. Substitute $PORT into nginx config (Render injects PORT)
+  3. Start nginx (background)
+  4. exec video-downloader (foreground, BACKEND_PORT=8081)
 ```
 
-#### 4. **handlers/download.rs** — Main Download Endpoint
+### Why nginx in front of the Rust backend?
 
-**Endpoint**: `POST /api/download`
+Render injects `$PORT` (e.g. 10000). Actix-web is bound to a fixed internal port (8081). nginx listens on `$PORT` and proxies to `localhost:8081`. This decouples the Render-assigned port from the backend config.
 
-**Request Body**:
-```json
-{
-  "url": "https://www.instagram.com/p/ABC123/"
-}
-```
+---
 
-**Response Flow**:
-1. Validate URL format
-2. Detect platform
-3. Fetch video metadata from platform's API
-4. Stream video bytes with correct Content-Disposition header
-5. Browser downloads file automatically
-
-**Response Headers** (on success):
-```
-Content-Type: video/mp4
-Content-Disposition: attachment; filename="instagram_video_ABC123.mp4"
-Content-Length: 5242880
-```
-
-#### 5. **api/{platform}.rs** — Platform Adapters
-
-Each platform adapter must implement:
+## Job System (`jobs.rs`)
 
 ```rust
-pub trait PlatformAdapter {
-    async fn validate_url(&self, url: &str) -> Result<bool>;
-    async fn fetch_metadata(&self, url: &str) -> Result<VideoMetadata>;
-    async fn get_download_url(&self, url: &str) -> Result<String>;
-}
+JobStore: Arc<DashMap<String, JobHandle>>
+  JobHandle {
+    tx: broadcast::Sender<JobEvent>,
+    result: Arc<Mutex<Option<JobResult>>>,
+    cancelled: Arc<AtomicBool>,
+  }
 
-// Example implementation for Instagram
-impl PlatformAdapter for InstagramAdapter {
-    async fn validate_url(&self, url: &str) -> Result<bool> {
-        // Check if URL matches Instagram patterns
-        // https://www.instagram.com/p/{ID}/
-        // https://www.instagram.com/reel/{ID}/
-    }
-    
-    async fn fetch_metadata(&self, url: &str) -> Result<VideoMetadata> {
-        // Call Instagram API or scrape metadata
-        // Extract video URL, title, duration, etc.
-    }
-    
-    async fn get_download_url(&self, url: &str) -> Result<String> {
-        // Return direct MP4 URL (with audio)
-    }
-}
+JobEvent: Progress { percent, speed, eta }
+        | Authenticating { method }
+        | Merging
+        | Done { filename }
+        | Cancelled
+        | Error { message }
+
+JobResult { file_path: String, filename: String, content_type: String }
 ```
+
+`extract_with_progress` runs in `tokio::spawn`. The SSE handler holds a `broadcast::Receiver` and forwards events to the client. When the client disconnects, the SSE handler is dropped; cancellation is via `AtomicBool`.
 
 ---
 
-## Frontend Architecture (React + TypeScript)
+## Rate Limiting (`middleware/rate_limiter.rs`)
 
-### Project Structure
+Two limits enforced per request:
+- Global: `MAX_REQUESTS_PER_MINUTE` (default 60)
+- Per-IP: `MAX_REQUESTS_PER_IP_PER_MINUTE` (default 30)
 
-```
-frontend/
-├── package.json              # Node.js dependencies
-├── tsconfig.json             # TypeScript configuration
-├── vite.config.ts            # Vite bundler configuration
-├── index.html                # Entry HTML file
-├── src/
-│   ├── main.tsx              # React app entry point
-│   ├── App.tsx               # Root component
-│   ├── components/
-│   │   ├── URLInput.tsx       # URL input field & validation
-│   │   ├── DownloadButton.tsx # Download trigger button
-│   │   ├── ProgressBar.tsx    # Download progress indicator
-│   │   ├── ErrorMessage.tsx   # Error display component
-│   │   ├── Header.tsx         # Top navigation
-│   │   └── Footer.tsx         # Footer with links
-│   ├── pages/
-│   │   ├── HomePage.tsx       # Main landing page
-│   │   └── FAQPage.tsx        # FAQ & help page
-│   ├── hooks/
-│   │   ├── useDownload.ts     # Custom hook for download logic
-│   │   └── useValidation.ts   # URL validation hook
-│   ├── services/
-│   │   └── api.ts             # HTTP client for backend communication
-│   ├── types/
-│   │   └── index.ts           # TypeScript type definitions
-│   ├── styles/
-│   │   ├── App.css            # App styling
-│   │   └── components.css     # Component-specific styles
-│   └── utils/
-│       ├── urlDetection.ts    # Identify platform from URL
-│       └── formatters.ts      # Format file names, sizes, etc.
-└── public/
-    ├── favicon.ico
-    └── logo.svg
-```
-
-### User Flow
-
-```
-User Opens App
-    ↓
-[Home Page Rendered]
-    ↓
-User Pastes URL in URLInput
-    ↓
-URLInput validates format (is it a valid social media URL?)
-    ↓
-User Clicks "Download" Button
-    ↓
-DownloadButton calls useDownload hook
-    ↓
-API Service sends POST to backend
-    ↓
-ProgressBar shows "Fetching video..." status
-    ↓
-Backend responds with video stream
-    ↓
-ProgressBar shows "Downloading..." (with progress %)
-    ↓
-Browser's download manager saves file
-    ↓
-ProgressBar shows "Complete!" ✓
-    ↓
-User's file is ready to use
-```
-
-### Key Components
-
-#### **URLInput.tsx**
-- Text field with paste support
-- Real-time URL validation
-- Platform detection (shows icon for detected platform)
-- Clear error messages for invalid URLs
-
-#### **useDownload.ts** Hook
-```typescript
-const useDownload = () => {
-  const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [error, setError] = useState<string | null>(null);
-
-  const download = async (url: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await api.downloadVideo(url);
-      // Trigger browser download
-      const blob = await response.blob();
-      const filename = extractFilename(response.headers);
-      triggerDownload(blob, filename);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return { download, loading, progress, error };
-};
-```
-
-#### **api.ts** Service
-```typescript
-export const api = {
-  async downloadVideo(url: string) {
-    const response = await fetch('http://localhost:8080/api/download', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-    if (!response.ok) throw new Error(await response.text());
-    return response;
-  },
-};
-```
+Both are in-memory sliding window counters. No Redis — state is local to the process. On Render free tier (single instance) this is fine.
 
 ---
 
-## API Strategy & Platform Coverage
+## Error Handling (`error.rs`)
 
-### Approach: Official APIs First, Fallback to Custom Extraction
-
-| Platform | Official API | Authentication | Rate Limit | Video Download? | Fallback Plan |
-|----------|--------------|-----------------|-----------|-----------------|---------------|
-| **Instagram** | Graph API | OAuth + AppID | 100/hour | Limited | `instagrapi` library |
-| **TikTok** | TikTok API | OAuth | 50/hour | No | `TikTok-Api-Sharp` |
-| **YouTube** | Data API v3 | API Key | 10k quota/day | No (ToS) | `yt-dlp` library |
-| **Twitter/X** | API v2 | Bearer Token | 450/15min | Yes | `tweepy` wrapper |
-| **Facebook** | Graph API | App Token | 200/hour | Limited | Custom URL parsing |
-| **Snapchat** | Not Public | ❌ | N/A | N/A | Research required |
-
-**Key Decision**: For platforms with restrictive APIs (Instagram, TikTok, YouTube), we'll use well-maintained open-source libraries wrapped in Rust via FFI or rewritten in Rust for better integration.
-
----
-
-## Error Handling Strategy
-
-```
-User Error (4xx)
-├─ Invalid URL format
-├─ URL not recognized (not a video)
-├─ Private/deleted video
-├─ Platform not supported
-└─ User rate-limited
-
-Platform Error (5xx)
-├─ API rate limit hit
-├─ API authentication failure
-├─ Video extraction failed
-├─ Audio stream not available
-└─ Platform API down
-
-Server Error (5xx)
-├─ Internal server error
-├─ Out of memory
-├─ Network connectivity issue
-└─ Streaming interrupted
-
-Response Format (all errors):
-{
-  "error": "ERROR_CODE",
-  "message": "Human-readable error message",
-  "retry_after": 60  // seconds until retry (if rate-limited)
-}
+```rust
+AppError::BadRequest(msg)       → 400
+AppError::PlatformError(msg)    → 502
+AppError::InternalServerError   → 500
+AppError::NotFound              → 404
+AppError::TooManyRequests       → 429
 ```
 
----
-
-## Deployment Architecture
-
-### Local Development
-```bash
-# Terminal 1: Backend
-cd backend && cargo run
-
-# Terminal 2: Frontend
-cd frontend && npm run dev
-
-# Browser: http://localhost:5173
-```
-
-### Docker (Single Container)
-```dockerfile
-FROM rust:latest AS builder
-WORKDIR /app
-COPY backend/ .
-RUN cargo build --release
-
-FROM node:18 AS frontend_builder
-WORKDIR /app
-COPY frontend/ .
-RUN npm install && npm run build
-
-FROM debian:bookworm-slim
-COPY --from=builder /app/target/release/video-downloader /usr/local/bin/
-COPY --from=frontend_builder /app/dist /static/
-CMD ["video-downloader"]
-```
-
-### Cloud Deployment (AWS Example)
-- **Backend**: EC2 instance or ECS Fargate container
-- **Frontend**: S3 + CloudFront (static hosting)
-- **Database**: (Optional) DynamoDB for caching metadata
-- **Load Balancer**: Application Load Balancer for scaling
-
----
-
-## Performance Considerations
-
-### Memory Efficiency
-- **Streaming approach**: Video never stored in RAM; data flows directly from source → client
-- **Per-request memory**: ~10-50MB for metadata + headers
-- **Concurrent connections**: Limited by OS file descriptors & network bandwidth
-
-### Rate Limiting
-```
-Global: 60 requests/minute
-Per-IP: 30 requests/minute
-Per-platform: 
-  - Instagram: 100/hour
-  - TikTok: 50/hour
-  - YouTube: 10k quota/day (shared)
-```
-
-### Caching Strategy
-- **Metadata cache**: 15-minute TTL (same URL → avoid re-fetching from API)
-- **Platform status cache**: 1-hour TTL (detect when platform is down)
-- **Client-side**: Disable browser caching for downloads
-
----
-
-## Security Considerations
-
-1. **Input Validation**: Strict URL format validation to prevent injection attacks
-2. **Rate Limiting**: Prevent DDoS and API quota exhaustion
-3. **CORS Configuration**: Only allow requests from known frontend domain
-4. **API Key Storage**: Use environment variables, never commit to git
-5. **HTTPS Enforcement**: All production requests encrypted
-6. **Download Sandboxing**: Files never execute; served as attachments
-
----
-
-## Testing Strategy
-
-### Unit Tests (Rust Backend)
-- Test each platform adapter independently
-- Mock API responses
-- Verify URL validation logic
-
-### Integration Tests (End-to-End)
-- Test full flow: URL input → metadata fetch → download stream
-- Use test URLs from each platform
-- Verify audio is preserved
-
-### Frontend Tests (React)
-- Component rendering tests
-- Error state handling
-- Download progress visualization
-
----
-
-## Maintenance & Monitoring
-
-### Logging
-- All API calls logged (timestamp, platform, status)
-- Error logs with stack traces
-- Rate limit hits tracked
-
-### Metrics
-- Requests per minute
-- Average download size & duration
-- Error rates per platform
-- API quota usage
-
-### Alerting
-- Platform API goes down → alert
-- Rate limits reached → alert
-- Errors >5% → alert
-
----
-
-## Future Enhancements
-
-1. **Batch Downloads**: Download multiple videos in queue
-2. **Playlist Support**: Download entire TikTok/YouTube playlists
-3. **Format Selection**: Let users choose MP4, WebM, audio-only (MP3)
-4. **Metadata Editing**: Allow users to add/edit title, tags before download
-5. **Desktop App**: Electron wrapper for Windows/Mac/Linux
-6. **Browser Extension**: One-click download from social media pages
-7. **History & Favorites**: Track downloaded videos (opt-in)
-8. **Video Conversion**: Convert to other formats on-the-fly
-
----
-
-## Success Criteria (MVP)
-
-✅ Download video from any of 6 platforms by pasting URL  
-✅ Audio is always preserved in output  
-✅ No intermediate server storage (stream directly)  
-✅ Works on mobile browser  
-✅ Handles errors gracefully with clear messages  
-✅ Supports 1000+ concurrent downloads  
-✅ Rate limits are respected per platform  
-✅ Deployment is automated (Docker/cloud-ready)
+Hard errors in yt-dlp stderr (private, geo-blocked, copyright, deleted) map to `PlatformError` with a human-readable message. Auth failures map to a different `PlatformError` message. The distinction matters for UX — users get actionable error messages.
