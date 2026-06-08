@@ -393,6 +393,27 @@ pub async fn extract_with_progress(
                 Err(s) => { if !s.is_empty() { last_stderr = s; } }
             }
         }
+
+        // 7. Direct HTTP fallback: extract raw media URL via --print and download via reqwest.
+        //    Handles platforms (Instagram images) where yt-dlp errors at extraction level
+        //    but can still resolve the direct URL with --allow-unplayable-formats.
+        check_cancelled!();
+        let cookie_sources_for_direct: Vec<Option<String>> = {
+            let mut v = vec![None];
+            if has_cookies { v.push(Some(cookies_path.clone())); }
+            v
+        };
+        for maybe_cookies in cookie_sources_for_direct {
+            reset_dir!();
+            if let Some(file_path) = download_image_direct(&url, &tmp_dir, maybe_cookies.as_deref()).await {
+                let ct = content_type_from_path(&file_path);
+                let fname = build_filename(title.as_deref(), false, &ct);
+                *result_store.lock().await = Some(JobResult { file_path, filename: fname.clone(), content_type: ct });
+                let _ = tx.send(JobEvent::Done { filename: fname });
+                return;
+            }
+            check_cancelled!();
+        }
     }
 
     let _ = tokio::fs::remove_dir_all(&tmp_dir).await;
@@ -491,6 +512,55 @@ async fn find_output_file(dir: &str) -> Option<String> {
         }
     }
     None
+}
+
+async fn download_image_direct(url: &str, tmp_dir: &str, cookies: Option<&str>) -> Option<String> {
+    // Ask yt-dlp for the raw media URL without downloading.
+    // --allow-unplayable-formats lets yt-dlp resolve image formats that it refuses to
+    // "download" through the normal format pipeline (e.g. Instagram image posts).
+    let mut args = vec![
+        "--print".to_string(), "%(url)s".to_string(),
+        "--print".to_string(), "%(ext)s".to_string(),
+        "--no-playlist".to_string(),
+        "--quiet".to_string(),
+        "--no-warnings".to_string(),
+        "--allow-unplayable-formats".to_string(),
+        "--no-check-formats".to_string(),
+        "-f".to_string(), "best".to_string(),
+    ];
+    if let Some(path) = cookies { args.push("--cookies".to_string()); args.push(path.to_string()); }
+    if let Some(proxy) = get_proxy() { args.push("--proxy".to_string()); args.push(proxy); }
+    args.push(url.to_string());
+
+    let output = Command::new(ytdlp_bin()).args(&args).output().await.ok()?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut lines = stdout.lines();
+    let media_url = lines.next()?.trim().to_string();
+    let ext = lines.next().map(str::trim).unwrap_or("jpg").to_string();
+
+    if media_url.is_empty() || !media_url.starts_with("http") {
+        log::debug!("download_image_direct: no usable URL from yt-dlp for {}", url);
+        return None;
+    }
+
+    log::info!("download_image_direct: fetching {} (ext={})", &media_url[..media_url.len().min(80)], ext);
+    let client = reqwest::Client::builder()
+        .user_agent("Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15")
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .ok()?;
+
+    let resp = client.get(&media_url).send().await.ok()?;
+    if !resp.status().is_success() {
+        log::debug!("download_image_direct: HTTP {} for media URL", resp.status());
+        return None;
+    }
+    let bytes = resp.bytes().await.ok()?;
+    if bytes.is_empty() { return None; }
+
+    let out_path = format!("{}/media.{}", tmp_dir, ext);
+    tokio::fs::write(&out_path, &bytes).await.ok()?;
+    Some(out_path)
 }
 
 fn content_type_from_path(path: &str) -> String {
