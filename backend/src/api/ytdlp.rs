@@ -366,6 +366,15 @@ pub async fn extract_with_progress(
         handle!(run_with_progress(&url, &tmp_dir, "best", false, true, CookieSource::None, false, &tx, &cancelled).await, soft_fail);
         check_cancelled!();
 
+        // Try session cookies in image mode (covers Instagram/Facebook image posts requiring auth)
+        if let Some(session_file) = build_session_cookies(&url).await {
+            reset_dir!();
+            let result = run_with_progress(&url, &tmp_dir, "best", false, true, CookieSource::File(&session_file), false, &tx, &cancelled).await;
+            let _ = tokio::fs::remove_file(&session_file).await;
+            handle!(result, soft_fail);
+            check_cancelled!();
+        }
+
         if has_cookies {
             reset_dir!();
             match run_with_progress(&url, &tmp_dir, "best", false, true, CookieSource::File(&cookies_path), false, &tx, &cancelled).await {
