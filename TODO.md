@@ -53,12 +53,12 @@ Without residential proxy, Instagram/Facebook detect the datacenter IP and block
    - Render: set in dashboard → Environment
 
 ### Status
-- [ ] Create service account cookies (throwaway Instagram + Facebook)
-- [ ] Upload/configure cookies (local file or Render env var or UI upload)
-- [ ] Sign up for residential proxy
-- [ ] Set `YTDLP_PROXY` env var (local `.env` or Render dashboard)
-- [ ] Test Instagram download
-- [ ] Test Facebook download
+- [x] Create service account cookies (throwaway Instagram + Facebook)
+- [x] Upload/configure cookies (local file or Render env var or UI upload)
+- [x] Sign up for residential proxy
+- [x] Set `YTDLP_PROXY` env var (local `.env` or Render dashboard)
+- [x] Test Instagram download
+- [x] Test Facebook download
 
 ---
 
@@ -82,9 +82,9 @@ yt-dlp --list-impersonate-targets
 ```
 
 ### Status
-- [ ] Run `bash scripts/setup_venv.sh` (preferred) or sudo pip install
-- [ ] Verify impersonate targets available
-- [ ] Test TikTok download locally
+- [x] Run `bash scripts/setup_venv.sh` (preferred) or sudo pip install
+- [x] Verify impersonate targets available
+- [x] Test TikTok download locally
 
 ---
 
@@ -93,10 +93,10 @@ yt-dlp --list-impersonate-targets
 ### Pre-deployment Checklist
 - [x] Frontend builds clean: `bun run build`
 - [x] Backend compiles: `cargo check`
-- [ ] All tests passing: `bun run test` + `cd backend && cargo test`
-- [ ] TikTok working locally
-- [ ] Service account cookies ready (`COOKIES_B64` or UI upload)
-- [ ] Residential proxy URL ready (`YTDLP_PROXY`)
+- [x] All tests passing: `bun run test` + `cd backend && cargo test`
+- [x] TikTok working locally
+- [x] Service account cookies ready (`COOKIES_B64` or UI upload)
+- [x] Residential proxy URL ready (`YTDLP_PROXY`)
 
 ### Deploy Steps
 
@@ -114,17 +114,17 @@ git push origin main
 ```
 
 ### Post-deployment Testing
-- [ ] YouTube download ✓
-- [ ] Twitter/X download ✓
-- [ ] TikTok download (curl-cffi in Docker)
-- [ ] Video preview shows before download
-- [ ] Audio-only (MP3) download works
-- [ ] Queue multiple downloads simultaneously
-- [ ] Download history persists across page refresh
-- [ ] Instagram download (needs cookies + proxy)
-- [ ] Facebook download (needs cookies + proxy)
-- [ ] Cancel download works
-- [ ] Cookie upload via UI works
+- [x] YouTube download ✓
+- [x] Twitter/X download ✓
+- [x] TikTok download (curl-cffi in Docker)
+- [x] Video preview shows before download
+- [x] Audio-only (MP3) download works
+- [x] Queue multiple downloads simultaneously
+- [x] Download history persists across page refresh
+- [x] Instagram download (needs cookies + proxy)
+- [x] Facebook download (needs cookies + proxy)
+- [x] Cancel download works
+- [x] Cookie upload via UI works
 
 ---
 
