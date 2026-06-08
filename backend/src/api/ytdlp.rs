@@ -87,6 +87,21 @@ async fn try_get_info(url: &str, cookies: Option<&str>, force_ipv6: bool) -> Opt
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         if !stderr.is_empty() { log::warn!("yt-dlp info failed for {}: {}", url, stderr.trim()); }
+        let sl = stderr.to_lowercase();
+        if sl.contains("there is no video in this post")
+            || sl.contains("no video formats found")
+            || sl.contains("no video could be found")
+        {
+            return Some(VideoInfo {
+                title: "Post".to_string(),
+                uploader: "Unknown".to_string(),
+                duration_seconds: None,
+                thumbnail_url: None,
+                filesize_approx: None,
+                platform: platform_from_url(url),
+                is_image: true,
+            });
+        }
         return None;
     }
 
@@ -597,6 +612,16 @@ fn auth_error_message(stderr: &str) -> String {
     } else {
         "Could not download this content. It may be private, geo-restricted, or require authentication.".into()
     }
+}
+
+fn platform_from_url(url: &str) -> String {
+    let u = url.to_lowercase();
+    if u.contains("instagram.com") || u.contains("ig.me") { "Instagram".into() }
+    else if u.contains("tiktok.com") { "TikTok".into() }
+    else if u.contains("twitter.com") || u.contains("x.com") { "Twitter".into() }
+    else if u.contains("facebook.com") || u.contains("fb.watch") { "Facebook".into() }
+    else if u.contains("youtube.com") || u.contains("youtu.be") { "YouTube".into() }
+    else { "Unknown".into() }
 }
 
 fn expand_home(path: &str) -> String {
