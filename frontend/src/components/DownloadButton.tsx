@@ -1,6 +1,4 @@
 import { FC } from 'react'
-import { DownloadIcon } from './Icons'
-import '../styles/components.css'
 
 interface DownloadButtonProps {
   onClick: () => void
@@ -11,20 +9,18 @@ interface DownloadButtonProps {
 const DownloadButton: FC<DownloadButtonProps> = ({ onClick, disabled, loading }) => {
   return (
     <button
-      className={`download-button ${loading ? 'loading' : ''}`}
+      className="btn-fetch"
+      style={{ width: '100%', marginTop: '1rem', justifyContent: 'center', padding: '0.85rem' }}
       onClick={onClick}
       disabled={disabled || loading}
+      type="button"
     >
-      {loading ? (
-        <>
-          <span className="spinner"></span> Downloading video...
-        </>
-      ) : (
-        <>
-          <DownloadIcon size={18} />
-          Download Video
-        </>
-      )}
+      <svg viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.92)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="16" height="16">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      {loading ? 'Downloading…' : 'Download'}
     </button>
   )
 }

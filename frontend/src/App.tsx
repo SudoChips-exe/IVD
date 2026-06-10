@@ -25,6 +25,12 @@ function App() {
   const [history, setHistory] = useState<HistoryEntry[]>([])
   const [playlistInfo, setPlaylistInfo] = useState<PlaylistInfo | null>(null)
   const [playlistLoading, setPlaylistLoading] = useState(false)
+  const [darkMode, setDarkMode] = useState(true)
+
+  // Apply theme to <html> element
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', darkMode ? 'dark' : 'light')
+  }, [darkMode])
 
   const isPlaylist = isPlaylistUrl(url)
   const { info, loading: infoLoading, error: infoError, clear: clearInfo } = useVideoInfo(isPlaylist ? '' : url)
@@ -78,12 +84,15 @@ function App() {
 
   return (
     <div className="app-container">
-      <Header />
+      {/* Animated background */}
+      <div className="bg-mesh" />
+      <div className="bg-orb" />
+      <div className="grain" />
+
+      <Header darkMode={darkMode} onToggleTheme={() => setDarkMode(d => !d)} />
 
       <main className="main-content">
         <div className="hero-section" id="home">
-          <div className="hero-glow-orb hero-glow-orb--cyan" />
-          <div className="hero-glow-orb hero-glow-orb--purple" />
           <div className="hero-eyebrow">
             <span className="hero-status-dot" />
             Free &middot; No account required
@@ -148,41 +157,43 @@ function App() {
         </div>
 
         {activeItems.length > 0 && (
-          <>
-            <div className="section-label">Downloading</div>
-            <div className="queue-section">
-              {activeItems.map(item => (
-                <DownloadQueueItem
-                  key={item.id}
-                  item={item}
-                  onCancel={() => cancelItem(item.id)}
-                  onRemove={() => removeItem(item.id)}
-                />
-              ))}
+          <div className="queue-section-wrapper">
+            <div className="queue-header">
+              <span className="queue-title">Downloading</span>
+              <span className="queue-count">{activeItems.length} running</span>
             </div>
-          </>
+            {activeItems.map(item => (
+              <DownloadQueueItem
+                key={item.id}
+                item={item}
+                onCancel={() => cancelItem(item.id)}
+                onRemove={() => removeItem(item.id)}
+              />
+            ))}
+          </div>
         )}
 
         {completedItems.length > 0 && (
-          <>
-            <div className="section-label">Completed</div>
-            <div className="queue-section">
-              {completedItems.map(item => (
-                <DownloadQueueItem
-                  key={item.id}
-                  item={item}
-                  onCancel={() => cancelItem(item.id)}
-                  onRemove={() => removeItem(item.id)}
-                />
-              ))}
+          <div className="queue-section-wrapper">
+            <div className="queue-header">
+              <span className="queue-title">Completed</span>
+              <span className="queue-count">{completedItems.length}</span>
             </div>
-          </>
+            {completedItems.map(item => (
+              <DownloadQueueItem
+                key={item.id}
+                item={item}
+                onCancel={() => cancelItem(item.id)}
+                onRemove={() => removeItem(item.id)}
+              />
+            ))}
+          </div>
         )}
 
         {history.length > 0 && (
-          <>
-            <div className="section-label section-label--history" id="history">
-              History
+          <div className="queue-section-wrapper" id="history">
+            <div className="queue-header">
+              <span className="queue-title">History</span>
               <button
                 className="clear-history-btn"
                 type="button"
@@ -191,10 +202,10 @@ function App() {
                 Clear all
               </button>
             </div>
-            <div className="history-section">
+            <div className="history-section" style={{padding: 0}}>
               {history.slice(0, 20).map(entry => (
                 <div key={entry.id} className="history-item">
-                  {entry.thumbnail && (
+                  {entry.thumbnail ? (
                     <img
                       className="history-thumb"
                       src={entry.thumbnail}
@@ -202,19 +213,17 @@ function App() {
                       loading="lazy"
                       onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
                     />
+                  ) : (
+                    <div className="hist-icon">
+                      <svg viewBox="0 0 24 24"><path d="M15 10l4.553-2.277A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 8a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8z"/></svg>
+                    </div>
                   )}
                   <div className="history-info">
                     <p className="history-title">{entry.title}</p>
                     <div className="history-meta">
-                      <span className={`platform-badge ${entry.platform.toLowerCase()}`}>
-                        {entry.platform}
-                      </span>
-                      <span className="history-quality">
-                        {entry.audioOnly ? 'MP3' : entry.quality.toUpperCase()}
-                      </span>
-                      <span className="history-date">
-                        {new Date(entry.timestamp).toLocaleDateString()}
-                      </span>
+                      <span className="platform-badge">{entry.platform}</span>
+                      <span className="history-quality">{entry.audioOnly ? 'MP3' : entry.quality.toUpperCase()}</span>
+                      <span className="history-date">{new Date(entry.timestamp).toLocaleDateString()}</span>
                     </div>
                   </div>
                   <div className="history-actions">
@@ -224,61 +233,46 @@ function App() {
                       title="Re-download"
                       onClick={() => addDownload(entry.url, entry.quality as Quality, entry.audioOnly)}
                       aria-label="Re-download"
-                    >
-                      ↺
-                    </button>
+                    >↺</button>
                     <button
                       className="history-action-btn"
                       type="button"
                       title="Copy URL"
                       onClick={() => navigator.clipboard.writeText(entry.url).catch(() => {})}
                       aria-label="Copy URL"
-                    >
-                      ⎘
-                    </button>
+                    >⎘</button>
                   </div>
                 </div>
               ))}
             </div>
-          </>
+          </div>
         )}
 
         <div className="section-label" id="features">Features</div>
         <div className="features-section">
           <div className="feature">
-            <div className="feature-icon-wrapper">
-              <PlatformsIcon size={20} />
-            </div>
+            <div className="feature-icon-wrapper"><PlatformsIcon size={20} /></div>
             <div className="feature-text">
               <h3>All Major Platforms</h3>
               <p>Download from Instagram, TikTok, YouTube, Twitter, and Facebook without restrictions.</p>
             </div>
           </div>
-
           <div className="feature">
-            <div className="feature-icon-wrapper">
-              <AudioIcon size={20} />
-            </div>
+            <div className="feature-icon-wrapper"><AudioIcon size={20} /></div>
             <div className="feature-text">
               <h3>Audio &amp; Video</h3>
               <p>Download full video or extract audio as MP3 — your choice, every time.</p>
             </div>
           </div>
-
           <div className="feature">
-            <div className="feature-icon-wrapper">
-              <FastIcon size={20} />
-            </div>
+            <div className="feature-icon-wrapper"><FastIcon size={20} /></div>
             <div className="feature-text">
               <h3>Real-Time Progress</h3>
               <p>Live download speed, ETA, and progress streamed directly from the server.</p>
             </div>
           </div>
-
           <div className="feature">
-            <div className="feature-icon-wrapper">
-              <MobileIcon size={20} />
-            </div>
+            <div className="feature-icon-wrapper"><MobileIcon size={20} /></div>
             <div className="feature-text">
               <h3>Queue Multiple Downloads</h3>
               <p>Start several downloads simultaneously — paste a URL and queue another while the first runs.</p>

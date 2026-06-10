@@ -22,32 +22,29 @@ interface QualitySelectorProps {
 const QualitySelector: FC<QualitySelectorProps> = ({ value, onChange, audioOnly, onAudioOnlyChange, disabled, isImage }) => {
   if (isImage) return null
   return (
-    <div className="quality-row">
-      <div className="quality-selector">
-        <span className="quality-label">Quality</span>
-        <div className="quality-options">
-          {OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              className={`quality-btn${value === opt.value && !audioOnly ? ' active' : ''}`}
-              onClick={() => { onAudioOnlyChange(false); onChange(opt.value) }}
-              disabled={disabled || audioOnly}
-              type="button"
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+    <div style={{ marginTop: '1rem' }}>
+      <span className="input-label">Quality</span>
+      <div className="quality-row">
+        {OPTIONS.map(opt => (
+          <button
+            key={opt.value}
+            className={`q-btn${value === opt.value && !audioOnly ? ' sel' : ''}`}
+            onClick={() => { onAudioOnlyChange(false); onChange(opt.value) }}
+            disabled={disabled}
+            type="button"
+          >
+            {opt.label}
+          </button>
+        ))}
+        <button
+          className={`q-btn${audioOnly ? ' sel' : ''}`}
+          onClick={() => onAudioOnlyChange(!audioOnly)}
+          disabled={disabled}
+          type="button"
+        >
+          MP3
+        </button>
       </div>
-      <button
-        className={`audio-only-btn${audioOnly ? ' active' : ''}`}
-        onClick={() => onAudioOnlyChange(!audioOnly)}
-        disabled={disabled}
-        type="button"
-        title="Download audio only as MP3"
-      >
-        MP3
-      </button>
     </div>
   )
 }
