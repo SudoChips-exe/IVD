@@ -1,5 +1,4 @@
 import { FC } from 'react'
-import '../styles/components.css'
 
 interface ProgressBarProps {
   progress: number
@@ -8,24 +7,12 @@ interface ProgressBarProps {
   eta?: string | null
 }
 
-const ProgressBar: FC<ProgressBarProps> = ({ progress, status, speed, eta }) => {
-  const label = status ?? (progress === 0 ? 'Starting...' : `Downloading... ${progress}%`)
-
-  return (
-    <div className="progress-container">
-      <div className="progress-info">
-        <span className="progress-status">{label}</span>
-        <div className="progress-meta">
-          {speed && <span className="progress-speed">{speed}</span>}
-          {eta && <span className="progress-eta">ETA {eta}</span>}
-          {!status && <span className="progress-percent">{progress}%</span>}
-        </div>
-      </div>
-      <div className="progress-bar">
-        <div className="progress-fill" style={{ width: `${Math.max(2, progress)}%` }} />
-      </div>
+const ProgressBar: FC<ProgressBarProps> = ({ progress, status, speed, eta }) => (
+  <div className="progress-bar-wrap">
+    <div className="progress-bar-track">
+      <div className="progress-bar-fill" style={{ width: `${Math.max(2, progress)}%` }} />
     </div>
-  )
-}
+  </div>
+)
 
 export default ProgressBar

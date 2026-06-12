@@ -1,32 +1,36 @@
-import { FC } from 'react'
-import { DownloadIcon } from './Icons'
-import '../styles/components.css'
+import { DownloadCloud } from './icons';
 
 interface DownloadButtonProps {
-  onClick: () => void
-  disabled?: boolean
-  loading?: boolean
+  onClick: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  label?: string;
 }
 
-const DownloadButton: FC<DownloadButtonProps> = ({ onClick, disabled, loading }) => {
+export default function DownloadButton({
+  onClick,
+  disabled = false,
+  loading = false,
+  label = 'Download now',
+}: DownloadButtonProps) {
   return (
     <button
-      className={`download-button ${loading ? 'loading' : ''}`}
+      type="button"
+      className="download-btn"
       onClick={onClick}
       disabled={disabled || loading}
     >
       {loading ? (
         <>
-          <span className="spinner"></span> Downloading video...
+          <span className="spinner" />
+          Preparing...
         </>
       ) : (
         <>
-          <DownloadIcon size={18} />
-          Download Video
+          <DownloadCloud />
+          {label}
         </>
       )}
     </button>
-  )
+  );
 }
-
-export default DownloadButton
