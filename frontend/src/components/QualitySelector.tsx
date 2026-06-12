@@ -1,55 +1,41 @@
-import { FC } from 'react'
+import type { Quality, QualityOption } from '../types';
+import { Check } from './icons';
 
-export type Quality = 'best' | '1080p' | '720p' | '480p' | '360p'
-
-const OPTIONS: { value: Quality; label: string }[] = [
-  { value: 'best', label: 'Best' },
-  { value: '1080p', label: '1080p' },
-  { value: '720p', label: '720p' },
-  { value: '480p', label: '480p' },
-  { value: '360p', label: '360p' },
-]
+const OPTIONS: QualityOption[] = [
+  { id: 'best', name: 'Best', sub: 'auto, highest' },
+  { id: '1080p', name: '1080p', sub: 'full hd mp4' },
+  { id: '720p', name: '720p', sub: 'hd mp4' },
+  { id: '480p', name: '480p', sub: 'sd mp4' },
+  { id: '360p', name: '360p', sub: 'low mp4' },
+  { id: 'mp3', name: 'MP3', sub: '320 kbps', tag: 'AUDIO' },
+];
 
 interface QualitySelectorProps {
-  value: Quality
-  onChange: (q: Quality) => void
-  audioOnly: boolean
-  onAudioOnlyChange: (v: boolean) => void
-  disabled?: boolean
-  isImage?: boolean
+  value: Quality;
+  onChange: (quality: Quality) => void;
 }
 
-const QualitySelector: FC<QualitySelectorProps> = ({ value, onChange, audioOnly, onAudioOnlyChange, disabled, isImage }) => {
-  if (isImage) return null
+export default function QualitySelector({ value, onChange }: QualitySelectorProps) {
   return (
-    <div className="quality-row">
-      <div className="quality-selector">
-        <span className="quality-label">Quality</span>
-        <div className="quality-options">
-          {OPTIONS.map(opt => (
-            <button
-              key={opt.value}
-              className={`quality-btn${value === opt.value && !audioOnly ? ' active' : ''}`}
-              onClick={() => { onAudioOnlyChange(false); onChange(opt.value) }}
-              disabled={disabled || audioOnly}
-              type="button"
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
+    <div className="card url-card" data-screen-label="QualitySelector">
+      <div className="section-label">Select quality</div>
+      <div className="quality-grid">
+        {OPTIONS.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            className={`q-opt${value === opt.id ? ' active' : ''}`}
+            onClick={() => onChange(opt.id)}
+          >
+            <Check className="q-check" />
+            <div className="q-name">
+              {opt.name}
+              {opt.tag && <span className="q-tag">{opt.tag}</span>}
+            </div>
+            <div className="q-sub">{opt.sub}</div>
+          </button>
+        ))}
       </div>
-      <button
-        className={`audio-only-btn${audioOnly ? ' active' : ''}`}
-        onClick={() => onAudioOnlyChange(!audioOnly)}
-        disabled={disabled}
-        type="button"
-        title="Download audio only as MP3"
-      >
-        MP3
-      </button>
     </div>
-  )
+  );
 }
-
-export default QualitySelector

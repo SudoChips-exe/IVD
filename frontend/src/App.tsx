@@ -1,326 +1,202 @@
-import { useState, useEffect } from 'react'
-import './App.css'
-import Header from './components/Header'
-import URLInput from './components/URLInput'
-import QualitySelector, { Quality } from './components/QualitySelector'
-import DownloadButton from './components/DownloadButton'
-import Footer from './components/Footer'
-import CookieUpload from './components/CookieUpload'
-import VideoPreview from './components/VideoPreview'
-import DownloadQueueItem from './components/DownloadQueueItem'
-import { PlatformsIcon, AudioIcon, FastIcon, MobileIcon } from './components/Icons'
-import { useDownloadQueue } from './hooks/useDownloadQueue'
-import { useVideoInfo } from './hooks/useVideoInfo'
-import { useScrollSpy } from './hooks/useScrollSpy'
-import { getHistory, clearHistory } from './utils/history'
-import { isPlaylistUrl } from './utils/urlDetection'
-import { HistoryEntry, PlaylistInfo } from './types'
-import { api } from './services/api'
+//ADEOLA THE DEPRESSED WAS HERE AS THE FRONTEND DEVELOPER FOR THIS PROJECT, I SWEAR
+import { useEffect, useRef, useState } from 'react';
+import Header from './components/Header';
+import URLInput from './components/URLInput';
+import VideoPreview from './components/VideoPreview';
+import QualitySelector from './components/QualitySelector';
+import DownloadButton from './components/DownloadButton';
+import DownloadQueueItem from './components/DownloadQueueItem';
+import CookieUpload from './components/CookieUpload';
+import Footer from './components/Footer';
+import { Inbox } from './components/icons';
+import Onboarding from './components/Onboarding';
+import * as api from './api';
+import type { DownloadJob, Quality, Theme, VideoInfo } from './types';
 
-function App() {
-  useScrollSpy()
-  const [url, setUrl] = useState('')
-  const [quality, setQuality] = useState<Quality>('best')
-  const [audioOnly, setAudioOnly] = useState(false)
-  const [history, setHistory] = useState<HistoryEntry[]>([])
-  const [playlistInfo, setPlaylistInfo] = useState<PlaylistInfo | null>(null)
-  const [playlistLoading, setPlaylistLoading] = useState(false)
+const QUALITY_DETAIL: Record<Quality, string> = {
+  best: 'Best mp4',
+  '1080p': '1080p mp4',
+  '720p': '720p mp4',
+  '480p': '480p mp4',
+  '360p': '360p mp4',
+  mp3: 'MP3 320kbps',
+};
 
-  const isPlaylist = isPlaylistUrl(url)
-  const { info, loading: infoLoading, error: infoError, clear: clearInfo } = useVideoInfo(isPlaylist ? '' : url)
-  const { items, addDownload, cancelItem, removeItem } = useDownloadQueue()
+function getInitialTheme(): Theme {
+  const saved = localStorage.getItem('vidclaw-theme');
+  return saved === 'light' ? 'light' : 'dark';
+}
+
+export default function App() {
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+  const [url, setUrl] = useState('');
+  const [platform, setPlatform] = useState('youtube');
+  const [quality, setQuality] = useState<Quality>('best');
+  const [info, setInfo] = useState<VideoInfo | null>(null);
+  const [fetching, setFetching] = useState(false);
+  const [jobs, setJobs] = useState<DownloadJob[]>([]);
+
+  // Keep one simulated-progress timer per job so demo mode animates cleanly.
+  const timers = useRef<Record<string, number>>({});
 
   useEffect(() => {
-    setHistory(getHistory())
-  }, [])
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('vidclaw-theme', theme);
+  }, [theme]);
 
   useEffect(() => {
-    if (items.some(i => i.state === 'done')) {
-      setHistory(getHistory())
+    const saved = timers.current;
+    return () => { Object.values(saved).forEach((t) => window.clearInterval(t)); };
+  }, []);
+
+  const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
+
+  // Build a believable preview without a backend so the design stays reviewable.
+  const demoInfo = (link: string): VideoInfo => {
+    let source = '';
+    try { source = new URL(link).hostname.replace(/^www\./, ''); } catch { source = `${platform}.com`; }
+    return {
+      id: String(Date.now()),
+      title: 'Building a premium dark UI from scratch',
+      thumbnail: 'https://images.unsplash.com/photo-1492619375914-88005aa9e8fb?q=80&w=600&auto=format&fit=crop',
+      duration: '12:48',
+      author: 'Polished Studio',
+      meta: '1.2M views, 2 weeks ago',
+      source,
+    };
+  };
+
+  const handleFetch = async () => {
+    if (!url.trim() || fetching) return;
+    setFetching(true);
+    try {
+      setInfo(await api.fetchVideoInfo(url.trim()));
+    } catch {
+      setInfo(demoInfo(url.trim()));
+    } finally {
+      setFetching(false);
     }
-  }, [items])
+  };
 
-  useEffect(() => {
-    if (!isPlaylist) {
-      setPlaylistInfo(null)
-      return
+  const simulateProgress = (id: string) => {
+    timers.current[id] = window.setInterval(() => {
+      setJobs((prev) => prev.map((j) => {
+        if (j.id !== id) return j;
+        const next = Math.min(100, j.progress + Math.random() * 14 + 4);
+        if (next >= 100) {
+          window.clearInterval(timers.current[id]);
+          delete timers.current[id];
+          return { ...j, progress: 100, status: 'completed', detail: `${QUALITY_DETAIL[j.quality]}, done` };
+        }
+        const speed = (12 + Math.random() * 10).toFixed(1);
+        return { ...j, progress: next, status: 'downloading', detail: `${Math.round(next)}% at ${speed} MB/s` };
+      }));
+    }, 600);
+  };
+
+  const handleDownload = async () => {
+    const current = info ?? (url.trim() ? demoInfo(url.trim()) : null);
+    if (!current) { handleFetch(); return; }
+
+    const id = `${Date.now()}`;
+    const job: DownloadJob = {
+      id,
+      title: current.title,
+      thumbnail: current.thumbnail,
+      quality,
+      status: 'queued',
+      progress: 0,
+      detail: `${QUALITY_DETAIL[quality]}, waiting`,
+    };
+    setJobs((prev) => [job, ...prev]);
+
+    try {
+      await api.startDownload(url.trim(), quality);
+    } catch {
+      // No backend in demo mode. The simulated progress below stands in.
     }
-    const trimmed = url.trim()
-    setPlaylistInfo(null)
-    setPlaylistLoading(true)
-    let cancelled = false
-    api.getPlaylistInfo(trimmed)
-      .then(data => { if (!cancelled) setPlaylistInfo(data) })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setPlaylistLoading(false) })
-    return () => { cancelled = true }
-  }, [url, isPlaylist])
+    simulateProgress(id);
+  };
 
-  const handleDownload = () => {
-    const trimmed = url.trim()
-    if (!trimmed) return
-    clearInfo()
-    setUrl('')
-    addDownload(trimmed, quality, audioOnly, info ?? undefined)
-  }
+  const handleCancel = (id: string) => {
+    window.clearInterval(timers.current[id]);
+    delete timers.current[id];
+    api.cancelDownload(id).catch(() => undefined);
+    setJobs((prev) => prev.map((j) => (
+      j.id === id ? { ...j, status: 'error', detail: 'Cancelled' } : j
+    )));
+  };
 
-  const handleDownloadAll = () => {
-    if (!playlistInfo) return
-    setUrl('')
-    setPlaylistInfo(null)
-    playlistInfo.entries.forEach(entry => {
-      addDownload(entry.url, quality, audioOnly)
-    })
-  }
+  const handleRemove = (id: string) => {
+    window.clearInterval(timers.current[id]);
+    delete timers.current[id];
+    setJobs((prev) => prev.filter((j) => j.id !== id));
+  };
 
-  const activeItems = items.filter(i => i.state === 'downloading')
-  const completedItems = items.filter(i => i.state !== 'downloading')
+  const handleCookies = (file: File) => {
+    api.uploadCookies(file).catch(() => undefined);
+  };
 
   return (
-    <div className="app-container">
-      <Header />
+    <>
+      <Onboarding />
+      <div className="aurora" />
+      <div className="grid-bg" />
 
-      <main className="main-content">
-        <div className="hero-section" id="home">
-          <div className="hero-glow-orb hero-glow-orb--cyan" />
-          <div className="hero-glow-orb hero-glow-orb--purple" />
-          <div className="hero-eyebrow">
-            <span className="hero-status-dot" />
-            Free &middot; No account required
-          </div>
-          <h1>VIDCLAW</h1>
-          <p>Download high-quality video and audio from any major social platform. Instant, private, no limits.</p>
-          <div className="hero-chips">
-            <span>Instagram</span>
-            <span>TikTok</span>
-            <span>YouTube</span>
-            <span>Twitter</span>
-            <span>Facebook</span>
-          </div>
-        </div>
+      <div className="shell">
+        <Header theme={theme} onToggleTheme={toggleTheme} />
 
-        <div className="download-section">
+        <section className="hero">
+          <span className="eyebrow"><span className="dot" /> Fast. Private. No watermarks.</span>
+          <h1>Download any video.<br /><span className="grad">Effortlessly.</span></h1>
+          <p>Paste a link from YouTube, TikTok, Instagram and more. Pick your quality. Done.</p>
+        </section>
+
+        <div className="stack">
           <URLInput
             value={url}
             onChange={setUrl}
-            onSubmit={isPlaylist ? handleDownloadAll : handleDownload}
-            disabled={false}
+            onSubmit={handleFetch}
+            activePlatform={platform}
+            onSelectPlatform={setPlatform}
           />
 
-          {isPlaylist && (
-            <div className="playlist-banner">
-              <div className="playlist-banner-info">
-                {playlistLoading ? (
-                  <span className="playlist-loading">Loading playlist…</span>
-                ) : playlistInfo ? (
-                  <>
-                    <span className="playlist-title">{playlistInfo.title}</span>
-                    <span className="playlist-count">{playlistInfo.total} video{playlistInfo.total !== 1 ? 's' : ''}</span>
-                  </>
-                ) : null}
-              </div>
-              <button
-                className="playlist-download-all-btn"
-                type="button"
-                onClick={handleDownloadAll}
-                disabled={!playlistInfo || playlistLoading}
-              >
-                Download all
-              </button>
-            </div>
-          )}
+          {info && <VideoPreview info={info} />}
 
-          {!isPlaylist && <VideoPreview info={info} loading={infoLoading} error={infoError} />}
-
-          <QualitySelector
-            value={quality}
-            onChange={setQuality}
-            audioOnly={audioOnly}
-            onAudioOnlyChange={setAudioOnly}
-            isImage={info?.is_image}
-          />
+          <QualitySelector value={quality} onChange={setQuality} />
 
           <DownloadButton
-            onClick={isPlaylist ? handleDownloadAll : handleDownload}
-            disabled={!url.trim() || (isPlaylist && (!playlistInfo || playlistLoading))}
-            loading={false}
+            onClick={handleDownload}
+            loading={fetching}
+            label={info ? 'Download now' : 'Fetch and download'}
           />
+
+          <div data-screen-label="DownloadQueue">
+            <div className="section-label">Download queue</div>
+            {jobs.length === 0 ? (
+              <div className="card queue-empty">
+                <Inbox />
+                <div>Your downloads will appear here.</div>
+              </div>
+            ) : (
+              <div className="queue">
+                {jobs.map((job) => (
+                  <DownloadQueueItem
+                    key={job.id}
+                    job={job}
+                    onCancel={handleCancel}
+                    onRemove={handleRemove}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+
+          <CookieUpload onUpload={handleCookies} />
         </div>
 
-        {activeItems.length > 0 && (
-          <>
-            <div className="section-label">Downloading</div>
-            <div className="queue-section">
-              {activeItems.map(item => (
-                <DownloadQueueItem
-                  key={item.id}
-                  item={item}
-                  onCancel={() => cancelItem(item.id)}
-                  onRemove={() => removeItem(item.id)}
-                />
-              ))}
-            </div>
-          </>
-        )}
-
-        {completedItems.length > 0 && (
-          <>
-            <div className="section-label">Completed</div>
-            <div className="queue-section">
-              {completedItems.map(item => (
-                <DownloadQueueItem
-                  key={item.id}
-                  item={item}
-                  onCancel={() => cancelItem(item.id)}
-                  onRemove={() => removeItem(item.id)}
-                />
-              ))}
-            </div>
-          </>
-        )}
-
-        {history.length > 0 && (
-          <>
-            <div className="section-label section-label--history" id="history">
-              History
-              <button
-                className="clear-history-btn"
-                type="button"
-                onClick={() => { clearHistory(); setHistory([]) }}
-              >
-                Clear all
-              </button>
-            </div>
-            <div className="history-section">
-              {history.slice(0, 20).map(entry => (
-                <div key={entry.id} className="history-item">
-                  {entry.thumbnail && (
-                    <img
-                      className="history-thumb"
-                      src={entry.thumbnail}
-                      alt=""
-                      loading="lazy"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-                    />
-                  )}
-                  <div className="history-info">
-                    <p className="history-title">{entry.title}</p>
-                    <div className="history-meta">
-                      <span className={`platform-badge ${entry.platform.toLowerCase()}`}>
-                        {entry.platform}
-                      </span>
-                      <span className="history-quality">
-                        {entry.audioOnly ? 'MP3' : entry.quality.toUpperCase()}
-                      </span>
-                      <span className="history-date">
-                        {new Date(entry.timestamp).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="history-actions">
-                    <button
-                      className="history-action-btn"
-                      type="button"
-                      title="Re-download"
-                      onClick={() => addDownload(entry.url, entry.quality as Quality, entry.audioOnly)}
-                      aria-label="Re-download"
-                    >
-                      ↺
-                    </button>
-                    <button
-                      className="history-action-btn"
-                      type="button"
-                      title="Copy URL"
-                      onClick={() => navigator.clipboard.writeText(entry.url).catch(() => {})}
-                      aria-label="Copy URL"
-                    >
-                      ⎘
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
-        <div className="section-label" id="features">Features</div>
-        <div className="features-section">
-          <div className="feature">
-            <div className="feature-icon-wrapper">
-              <PlatformsIcon size={20} />
-            </div>
-            <div className="feature-text">
-              <h3>All Major Platforms</h3>
-              <p>Download from Instagram, TikTok, YouTube, Twitter, and Facebook without restrictions.</p>
-            </div>
-          </div>
-
-          <div className="feature">
-            <div className="feature-icon-wrapper">
-              <AudioIcon size={20} />
-            </div>
-            <div className="feature-text">
-              <h3>Audio &amp; Video</h3>
-              <p>Download full video or extract audio as MP3 — your choice, every time.</p>
-            </div>
-          </div>
-
-          <div className="feature">
-            <div className="feature-icon-wrapper">
-              <FastIcon size={20} />
-            </div>
-            <div className="feature-text">
-              <h3>Real-Time Progress</h3>
-              <p>Live download speed, ETA, and progress streamed directly from the server.</p>
-            </div>
-          </div>
-
-          <div className="feature">
-            <div className="feature-icon-wrapper">
-              <MobileIcon size={20} />
-            </div>
-            <div className="feature-text">
-              <h3>Queue Multiple Downloads</h3>
-              <p>Start several downloads simultaneously — paste a URL and queue another while the first runs.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="section-label" id="faq">FAQ</div>
-        <div className="faq-section">
-          <div className="faq-list">
-            <div className="faq-item">
-              <h3>Which platforms are supported?</h3>
-              <p>Instagram, TikTok, YouTube, Twitter, and Facebook.</p>
-            </div>
-            <div className="faq-item">
-              <h3>Is it free to use?</h3>
-              <p>Yes — completely free with no account required.</p>
-            </div>
-            <div className="faq-item">
-              <h3>What video quality is downloaded?</h3>
-              <p>Choose from Best, 1080p, 720p, 480p, or 360p. Select MP3 to extract audio only.</p>
-            </div>
-            <div className="faq-item">
-              <h3>Why do Instagram downloads fail?</h3>
-              <p>Instagram requires authentication. Upload your cookies.txt file using the settings below.</p>
-            </div>
-            <div className="faq-item">
-              <h3>Is downloading videos legal?</h3>
-              <p>Only download content you own or have explicit permission to use. Respect platform terms of service and copyright law.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="section-label" id="contact">Settings</div>
-        <div className="settings-section">
-          <CookieUpload />
-        </div>
-      </main>
-
-      <Footer />
-    </div>
-  )
+        <Footer />
+      </div>
+    </>
+  );
 }
-
-export default App

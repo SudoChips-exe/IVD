@@ -1,30 +1,28 @@
-import React from 'react'
-import { LogoIcon } from './Icons'
-import '../styles/components.css'
+import type { Theme } from '../types';
+import { ClawMark, Moon, Sun } from './icons';
 
-const scrollTo = (id: string) => (e: React.MouseEvent) => {
-  e.preventDefault()
-  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' })
+interface HeaderProps {
+  theme: Theme;
+  onToggleTheme: () => void;
 }
 
-const Header: React.FC = () => {
+export default function Header({ theme, onToggleTheme }: HeaderProps) {
   return (
-    <header className="header">
-      <div className="header-content">
-        <a onClick={scrollTo('home')} href="/" className="logo-container">
-          <LogoIcon className="logo-icon" size={22} />
-          <span className="logo logo-full">VIDCLAW</span>
-          <span className="logo logo-short">UVD</span>
-        </a>
-        <nav className="nav-menu">
-          <a onClick={scrollTo('home')} href="/">Home</a>
-          <a onClick={scrollTo('features')} href="/">Features</a>
-          <a onClick={scrollTo('faq')} href="/">FAQ</a>
-          <a onClick={scrollTo('contact')} href="/">Contact</a>
-        </nav>
+    <header className="site-header" data-screen-label="Header">
+      <div className="brand">
+        <div className="brand-mark">
+          <ClawMark />
+        </div>
+        <div>
+          <div className="wordmark">VID<b>CLAW</b></div>
+          <div className="brand-sub">video downloader</div>
+        </div>
       </div>
-    </header>
-  )
-}
 
-export default Header
+      <button className="theme-toggle" onClick={onToggleTheme} aria-label="Toggle color theme">
+        {theme === 'dark' ? <Moon /> : <Sun />}
+        <span>{theme === 'dark' ? 'Dark' : 'Light'}</span>
+      </button>
+    </header>
+  );
+}

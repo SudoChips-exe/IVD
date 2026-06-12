@@ -1,71 +1,71 @@
-import { FC } from 'react'
-import { QueueItem } from '../hooks/useDownloadQueue'
-import ProgressBar from './ProgressBar'
+import type { DownloadJob, DownloadStatus } from '../types';
+import { Close, Trash, External } from './icons';
 
-interface Props {
-  item: QueueItem
-  onCancel: () => void
-  onRemove: () => void
+const STATUS_LABEL: Record<DownloadStatus, string> = {
+  queued: 'Queued',
+  downloading: 'Downloading',
+  completed: 'Completed',
+  error: 'Failed',
+};
+
+interface DownloadQueueItemProps {
+  job: DownloadJob;
+  onCancel: (id: string) => void;
+  onRemove: (id: string) => void;
 }
 
-const DownloadQueueItem: FC<Props> = ({ item, onCancel, onRemove }) => {
-  const { info, state, progress, speed, eta, status, error, audioOnly, quality } = item
+export default function DownloadQueueItem({ job, onCancel, onRemove }: DownloadQueueItemProps) {
+  const active = job.status === 'downloading' || job.status === 'queued';
 
   return (
-    <div className={`queue-item queue-item--${state}`}>
-      <div className="queue-item-header">
-        {info?.thumbnail_url && (
-          <img
-            className="queue-thumb"
-            src={info.thumbnail_url}
-            alt=""
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }}
-          />
-        )}
-        <div className="queue-info">
-          <p className="queue-title">{info?.title ?? item.url}</p>
-          <div className="queue-meta">
-            {info?.uploader && <span className="queue-uploader">{info.uploader}</span>}
-            <span className="queue-badge">{audioOnly ? 'MP3' : quality.toUpperCase()}</span>
-            {state === 'done' && <span className="queue-state-badge queue-state-badge--done">Done</span>}
-            {state === 'error' && <span className="queue-state-badge queue-state-badge--error">Failed</span>}
-            {state === 'cancelled' && <span className="queue-state-badge queue-state-badge--cancelled">Cancelled</span>}
-          </div>
-        </div>
-        <div className="queue-actions" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-          {state === 'downloading' && (
-            <button className="queue-cancel-btn" onClick={onCancel} type="button">
-              Cancel
-            </button>
-          )}
-          {state === 'done' && (
-            <button
-              className="queue-remove-btn"
-              type="button"
-              title="Copy source URL"
-              onClick={() => navigator.clipboard.writeText(item.url).catch(() => {})}
-              aria-label="Copy URL"
-            >
-              ⎘
-            </button>
-          )}
-          {state !== 'downloading' && (
-            <button className="queue-remove-btn" onClick={onRemove} type="button" aria-label="Remove">
-              ✕
-            </button>
-          )}
-        </div>
+    <div className="card q-item">
+      <div className="q-thumb">
+        {job.thumbnail && <img src={job.thumbnail} alt="" />}
       </div>
 
-      {state === 'downloading' && (
-        <ProgressBar progress={progress} status={status} speed={speed} eta={eta} />
-      )}
+      <div className="q-body">
+        <div className="q-top">
+          <div className="q-title">{job.title}</div>
+          <div className="q-actions">
+            {job.status === 'completed' && (
+              <button className="icon-btn" type="button" title="Open file">
+                <External />
+              </button>
+            )}
+            {active ? (
+              <button
+                className="icon-btn danger"
+                type="button"
+                title="Cancel"
+                onClick={() => onCancel(job.id)}
+              >
+                <Close />
+              </button>
+            ) : (
+              <button
+                className="icon-btn"
+                type="button"
+                title="Remove"
+                onClick={() => onRemove(job.id)}
+              >
+                <Trash />
+              </button>
+            )}
+          </div>
+        </div>
 
-      {state === 'error' && error && (
-        <p className="queue-error-msg">{error}</p>
-      )}
+        <div className="progress">
+          <i style={{ width: `${Math.max(0, Math.min(100, job.progress))}%` }} />
+        </div>
+
+        <div className="q-foot">
+          <span className={`badge ${job.status}`}>
+            <span className="bdot" />
+            {STATUS_LABEL[job.status]}
+          </span>
+          <span>{job.detail}</span>
+        </div>
+      </div>
     </div>
-  )
+  );
 }
-
-export default DownloadQueueItem

@@ -1,65 +1,65 @@
-import { FC, useEffect, useRef, useState } from 'react'
-import { api } from '../services/api'
+import { useRef, useState } from 'react';
+import { Cookie, Chevron, Upload, Check } from './icons';
 
-const CookieUpload: FC = () => {
-  const [active, setActive] = useState(false)
-  const [uploading, setUploading] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    api.getCookiesStatus().then(s => setActive(s.active)).catch(() => {})
-  }, [])
-
-  const handleFile = async (file: File) => {
-    setUploading(true)
-    setMessage(null)
-    setError(null)
-    try {
-      const content = await file.text()
-      await api.uploadCookies(content)
-      setActive(true)
-      setMessage('Cookies saved. Instagram and Facebook downloads enabled.')
-    } catch {
-      setError('Upload failed. Make sure you exported a valid cookies.txt file.')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  return (
-    <div className="cookie-upload">
-      <div className="cookie-header">
-        <span className="cookie-title">Auth Cookies</span>
-        <span className={`cookie-status${active ? ' active' : ''}`}>
-          {active ? '● Active' : '○ Not set'}
-        </span>
-      </div>
-      <p className="cookie-desc">
-        Required for Instagram &amp; Facebook. Export <code>cookies.txt</code> using the
-        {' '}<em>Get cookies.txt LOCALLY</em> browser extension while logged in.
-      </p>
-      <div className="cookie-actions">
-        <button
-          className="cookie-btn"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-        >
-          {uploading ? 'Uploading...' : 'Upload cookies.txt'}
-        </button>
-      </div>
-      <input
-        ref={fileRef}
-        type="file"
-        accept=".txt,text/plain"
-        style={{ display: 'none' }}
-        onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}
-      />
-      {message && <p className="cookie-msg success">{message}</p>}
-      {error && <p className="cookie-msg error">{error}</p>}
-    </div>
-  )
+interface CookieUploadProps {
+  onUpload: (file: File) => void;
 }
 
-export default CookieUpload
+export default function CookieUpload({ onUpload }: CookieUploadProps) {
+  const [open, setOpen] = useState(false);
+  const [drag, setDrag] = useState(false);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleFile = (file: File | undefined) => {
+    if (!file) return;
+    setFileName(file.name);
+    onUpload(file);
+  };
+
+  return (
+    <div className={`card cookie-card${open ? ' open' : ''}`} data-screen-label="CookieUpload">
+      <div className="cookie-head" onClick={() => setOpen((v) => !v)}>
+        <div className="cookie-ico"><Cookie /></div>
+        <div className="ct">
+          <h4>Instagram authentication</h4>
+          <p>Upload cookies.txt to download private or age-gated content</p>
+        </div>
+        <Chevron className="chev" />
+      </div>
+
+      <div className="cookie-body">
+        <div>
+          <div
+            className={`dropzone${drag ? ' drag' : ''}${fileName ? ' loaded' : ''}`}
+            onClick={() => inputRef.current?.click()}
+            onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+            onDragLeave={() => setDrag(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDrag(false);
+              handleFile(e.dataTransfer.files[0]);
+            }}
+          >
+            {fileName ? <Check /> : <Upload />}
+            <div className="dz-t">
+              {fileName ? (
+                <>Loaded <b>{fileName}</b></>
+              ) : (
+                <>Drop <b>cookies.txt</b> or click to browse</>
+              )}
+            </div>
+            <div className="dz-s">netscape format, stored locally only</div>
+          </div>
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".txt"
+            hidden
+            onChange={(e) => handleFile(e.target.files?.[0])}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
