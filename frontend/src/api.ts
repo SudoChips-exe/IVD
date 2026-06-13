@@ -25,7 +25,6 @@ function normalizeInfo(data: Record<string, unknown>, url: string): VideoInfo {
   };
 }
 
-
 export async function fetchVideoInfo(url: string): Promise<VideoInfo> {
   const { data } = await client.get('/info', { params: { url } });
   return normalizeInfo(data as Record<string, unknown>, url);

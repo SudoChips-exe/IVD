@@ -6,14 +6,43 @@ export type Platform =
   | 'Facebook'
   | 'Unknown'
 
+export type Theme = 'dark' | 'light'
+
+export type Quality = 'best' | '1080p' | '720p' | '480p' | '360p' | 'mp3'
+
+export type DownloadStatus = 'queued' | 'downloading' | 'completed' | 'error'
+
 export interface VideoInfo {
+  id?: string
   title: string
-  uploader: string
-  duration_seconds?: number
+  thumbnail: string
   thumbnail_url?: string
+  duration?: string
+  duration_seconds?: number
+  author?: string
+  uploader?: string
+  meta?: string
+  source?: string
+  platform?: string
   filesize_approx?: number
-  platform: string
   is_image?: boolean
+}
+
+export interface DownloadJob {
+  id: string
+  title: string
+  thumbnail: string
+  quality: Quality
+  status: DownloadStatus
+  progress: number
+  detail: string
+}
+
+export interface QualityOption {
+  id: Quality
+  name: string
+  sub: string
+  tag?: string
 }
 
 export interface PlaylistEntry {

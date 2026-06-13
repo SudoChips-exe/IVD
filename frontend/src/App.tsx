@@ -1,4 +1,3 @@
-//ADEOLA THE DEPRESSED WAS HERE AS THE FRONTEND DEVELOPER FOR THIS PROJECT, I SWEAR
 import { useEffect, useRef, useState } from 'react';
 import Header from './components/Header';
 import URLInput from './components/URLInput';
