@@ -1,4 +1,4 @@
-import { ClawMark } from './icons';
+import { ClawMark } from './Icons';
 
 export default function Footer() {
   const year = new Date().getFullYear();

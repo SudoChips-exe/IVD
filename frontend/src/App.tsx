@@ -7,7 +7,7 @@ import DownloadButton from './components/DownloadButton';
 import DownloadQueueItem from './components/DownloadQueueItem';
 import CookieUpload from './components/CookieUpload';
 import Footer from './components/Footer';
-import { Inbox } from './components/icons';
+import { Inbox } from './components/Icons';
 import Onboarding from './components/Onboarding';
 import * as api from './api';
 import type { DownloadJob, Quality, Theme, VideoInfo } from './types';

@@ -1,5 +1,5 @@
 import type { Quality, QualityOption } from '../types';
-import { Check } from './icons';
+import { Check } from './Icons';
 
 const OPTIONS: QualityOption[] = [
   { id: 'best', name: 'Best', sub: 'auto, highest' },

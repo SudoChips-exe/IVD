@@ -1,7 +1,12 @@
-import type { Platform } from '../types';
-import { Link, Clipboard } from './icons';
+import { Link, Clipboard } from './Icons';
 
-const PLATFORMS: Platform[] = [
+interface PlatformChip {
+  id: string;
+  label: string;
+  color: string;
+}
+
+const PLATFORMS: PlatformChip[] = [
   { id: 'youtube', label: 'YouTube', color: '#ff4d4d' },
   { id: 'instagram', label: 'Instagram', color: '#e1306c' },
   { id: 'tiktok', label: 'TikTok', color: '#9aa6c2' },

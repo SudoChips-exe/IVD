@@ -1,4 +1,4 @@
-import { DownloadCloud } from './icons';
+import { DownloadCloud } from './Icons';
 
 interface DownloadButtonProps {
   onClick: () => void;

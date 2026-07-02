@@ -139,7 +139,7 @@ export const useDownloadQueue = () => {
           url,
           title: info.title,
           thumbnail: info.thumbnail_url,
-          platform: info.platform,
+          platform: info.platform ?? 'Unknown',
           quality,
           audioOnly,
         })

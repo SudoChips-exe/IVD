@@ -1,5 +1,5 @@
 import type { Theme } from '../types';
-import { ClawMark, Moon, Sun } from './icons';
+import { ClawMark, Moon, Sun } from './Icons';
 
 interface HeaderProps {
   theme: Theme;

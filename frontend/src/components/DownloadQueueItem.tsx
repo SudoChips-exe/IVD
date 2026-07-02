@@ -1,5 +1,5 @@
 import type { DownloadJob, DownloadStatus } from '../types';
-import { Close, Trash, External } from './icons';
+import { Close, Trash, External } from './Icons';
 
 const STATUS_LABEL: Record<DownloadStatus, string> = {
   queued: 'Queued',

@@ -116,6 +116,14 @@ export const Upload: Icon = (p) => (
   </svg>
 );
 
+export const AlertTriangleIcon: (props: SVGProps<SVGSVGElement> & { size?: number }) => JSX.Element = ({ size, ...p }) => (
+  <svg {...base} width={size} height={size} {...p}>
+    <path d="M12 3 2 20h20L12 3Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+    <path d="M12 10v4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    <circle cx="12" cy="17" r="0.9" fill="currentColor" />
+  </svg>
+);
+
 export const Inbox: Icon = (p) => (
   <svg {...base} {...p}>
     <path d="M3 13h4l2 3h6l2-3h4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

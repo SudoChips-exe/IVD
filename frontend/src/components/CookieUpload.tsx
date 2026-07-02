@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Cookie, Chevron, Upload, Check } from './icons';
+import { Cookie, Chevron, Upload, Check } from './Icons';
 
 interface CookieUploadProps {
   onUpload: (file: File) => void;

@@ -1,5 +1,5 @@
 import type { VideoInfo } from '../types';
-import { Play, User, Clock } from './icons';
+import { Play, User, Clock } from './Icons';
 
 interface VideoPreviewProps {
   info: VideoInfo;
